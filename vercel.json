@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/UmpanLab_v6_in_progress.html" }
+  ]
+}
