@@ -1,0 +1,40 @@
+{
+  "body_volume_cm3": 26.56,
+  "bill_volume_cm3": 3.14,
+  "overall_length_mm": 134.4,
+  "assembly_watertight": true,
+  "hardware_points_mm": {
+    "line_tie": [
+      -10.2,
+      0.0,
+      -10.8
+    ],
+    "belly_hanger": [
+      40.0,
+      0.0,
+      -12.2
+    ],
+    "tail_hanger": [
+      88.5,
+      0.0,
+      0.0
+    ],
+    "ballast_center": [
+      36.0,
+      0.0,
+      -6.0
+    ]
+  },
+  "bbox": [
+    [
+      -44.4,
+      -13.0,
+      -24.3
+    ],
+    [
+      90.0,
+      13.0,
+      15.0
+    ]
+  ]
+}
