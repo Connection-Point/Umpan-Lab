@@ -3657,7 +3657,7 @@ function buildControls(){ buildFamBox(); buildDesignControls(); buildSimControls
 /* Design accordion for the current family (rebuilt when the family or the custom component list changes) */
 let CTL_FAM=null;
 function buildDesignControls(){
-  const openName=(()=>{ const a=ctl.querySelector('.acc[aria-expanded=true]'); return a?a.firstChild.textContent:null; })();
+  const openName=(()=>{ const a=ctl.querySelector('.acc[aria-expanded=true]'); return a?(window.i18nSrc?window.i18nSrc(a.firstChild):a.firstChild.textContent):null; })();
   Object.keys(inputs).forEach(k=>{ if(inputs[k].row&&ctl.contains(inputs[k].row)) delete inputs[k]; });
   ctl.innerHTML=''; const keys=famKeys(), fam=famOf(P), sameFam=CTL_FAM===fam; CTL_FAM=fam; let first=null, reopen=null;
   UI_GROUPS.forEach(([name,basic0,adv0])=>{
@@ -3677,7 +3677,7 @@ function buildDesignControls(){
       }
       if(name==='Finish') buildFinish(b);
     },{adv:adv.length>0,cls:'spec'});
-    ctl.appendChild(g); if(!first) first=g; if(sameFam&&openName&&g.querySelector('.acc').firstChild.textContent===openName) reopen=g;
+    ctl.appendChild(g); if(!first) first=g; if(sameFam&&openName&&(window.i18nSrc?window.i18nSrc(g.querySelector('.acc').firstChild):g.querySelector('.acc').firstChild.textContent)===openName) reopen=g;
   });
   openGroup(reopen||first,true);
   if($('pat')) syncPaint();
@@ -6201,6 +6201,586 @@ buildControls(); buildEditor(); refreshMine(); resize();
 loadPreset('toman90'); $('dname').value='Toman Deep Crank 90'; markSaved();
 setMode(MODES.includes(location.hash.slice(1))?location.hash.slice(1):'design',{noHash:true});
 resize(); requestRender();
+</script>
+<!-- ===== i18n: English / 中文 language switch =====
+     Translates the on-screen UI by watching the DOM, so the app code keeps working in English.
+     Exported files (tech pack, drawing, BOM, JSON) and the drawing preview stay in English for the factory.
+     Dictionary keys are the English text with every number replaced by {} ; values may use {} in order or {0},{1}… -->
+<script id="i18n">
+"use strict";
+(function(){
+const LS_KEY='umpanlab.lang';
+const NUM=/[−-]?\d+(?:[.,]\d+)*/g;
+const SKIP_SEL='script,style,textarea,#drawPrev,.brand b,[data-noi18n]';
+const ATTRS=['title','placeholder','aria-label'];
+
+/* ---------- names reused by the pattern rules ---------- */
+const FAM={
+ 'Crankbait':'胖子（Crankbait）','Lipless vibration':'无舌 VIB 震动饵','Popper / chugger':'波扒 / 吐泡饵',
+ 'Topwater pencil (walk-the-dog)':'水面铅笔（Z 字狗走）','Propbait (front / rear props)':'螺旋桨饵（前 / 后桨）',
+ 'Jump frog (hard body)':'硬体跳跳蛙','Soft hollow frog':'软体空心雷蛙','Spinnerbait':'复合亮片',
+ 'Buzzbait':'拖拉机（Buzzbait）','Casting / weedless spoon':'远投 / 防挂勺型亮片','Custom — from scratch':'自定义——从零开始',
+ 'Start from scratch':'从零开始'};
+const SPECIES={
+ 'Toman':'托曼','Haruan':'生鱼（Haruan）','Sebarau':'西巴劳（Sebarau）','Siakap':'金目鲈（Siakap）','Peacock bass':'孔雀鲈',
+ 'Raja / peacock bass':'孔雀鲈（Raja）','Toman (giant snakehead)':'托曼（巨型蛇头鱼）','Haruan (snakehead)':'生鱼（斑鳢）',
+ 'Sebarau (hampala barb)':'西巴劳（哈朗鲃）','Siakap (barramundi)':'金目鲈（尖吻鲈）','Baung (river catfish)':'Baung（河鲶）',
+ 'Jelawat (Hoven\'s carp)':'Jelawat（苏丹鱼）','Kelah (Malaysian mahseer)':'Kelah（马来西亚结鱼）','Kerapu (grouper)':'石斑鱼（Kerapu）',
+ 'GT (giant trevally)':'GT（浪人鲹）','Tilapia':'罗非鱼','Lampam jawa (Javaen barb)':'Lampam jawa（爪哇鲃）','Patin (shark catfish)':'Patin（巴丁鱼）'};
+const COLOURWAY={'Black gold':'黑金','Chartreuse shad':'荧光黄鲥','Padi frog':'稻田蛙','Firetiger':'火虎','Ghost white':'幽灵白','Red head':'红头','Haruan natural':'生鱼原色'};
+const PRESET={'Toman Deep Crank':'托曼深潜胖子','Lipless vibe':'无舌 VIB','Chugger':'吐泡','popper':'波扒','Walker':'Walker','topwater pencil':'水面铅笔',
+ 'Twin-prop':'双桨','Katak jump frog':'Katak 跳跳蛙','Hollow soft frog':'空心软体雷蛙','Tandem spinnerbait':'双叶复合亮片',
+ 'Clacker buzzbait':'响板拖拉机','Casting spoon':'远投勺型亮片','Custom blank':'自定义毛坯','Medium Crank':'中潜胖子','Minnow':'米诺','Square-bill':'方唇胖子'};
+
+/* ---------- exact strings ({} = any number) ---------- */
+const ZH={
+/* header / menus */
+'lure designer · mm / g':'路亚设计器 · mm / g','Design name':'设计名称','Revision':'版本','Release status':'发布状态',
+'Rev A':'版本 A','Rev':'版本','Concept':'概念','Checked':'已校核','Approved':'已批准','Released':'已发布','Golden':'金样',
+'Workspace':'工作区','Design':'设计','Analyse':'分析','Simulate':'模拟','Release':'发布',
+'New lure':'新建路亚','New lure: pick a family (gallery)':'新建路亚：选择类别（图库）','New lure':'新建路亚',
+'Save':'保存','Save in this browser (logs the spec diff)':'保存在此浏览器（记录规格变更）',
+'File ▾':'文件 ▾','File':'文件','New…':'新建…','gallery: every lure family, or start from scratch':'图库：全部路亚类别，或从零开始',
+'New from preset':'从预设新建','Presets':'预设','Saved in this browser':'已保存在此浏览器','Open a saved design':'打开已保存的设计',
+'My designs…':'我的设计…','Delete…':'删除…','Delete the selected saved design':'删除所选的已保存设计',
+'Import design JSON…':'导入设计 JSON…','v{} and v{} files; every field is validated':'支持 v{} 与 v{} 文件；每个字段都会校验',
+'Export ▾':'导出 ▾','Export':'导出','Prototype (print / wood)':'原型（3D 打印 / 木制）',
+'STL pack (.zip)':'STL 包（.zip）','assembly, body, bill, slot cutter, {}:{} SVG, design JSON':'装配体、本体、潜水唇、槽刀、{}:{} SVG、设计 JSON',
+'{}:{} template (.svg)':'{}:{} 模板（.svg）','side, top and flat bill pattern; print at {} %':'侧视、俯视与潜水唇展开图；按 {} % 打印',
+'Design file (.json)':'设计文件（.json）','v{}: spec / sim / meta, re-importable':'v{}：规格 / 模拟 / 元数据，可重新导入',
+'Factory release (injection)':'工厂发布（注塑）','Release pack (.zip)':'发布包（.zip）',
+'mold halves, drawing, tech pack, BOM, QC, costing':'模具半模、图纸、技术包、BOM、QC、成本',
+'Tech pack (.pdf)':'技术包（.pdf）','Tech pack (.html)':'技术包（.html）','Drawing (.svg)':'图纸（.svg）',
+'Bill of materials (.csv)':'物料清单（.csv）','Import design JSON file':'导入设计 JSON 文件',
+'All changes saved':'所有更改已保存',
+/* spec strip */
+'Specification summary':'规格摘要','Body length':'本体长度','Weight ready to fish (CALC)':'整备重量（CALC）',
+'Buoyancy class and net buoyancy (CALC)':'浮力等级与净浮力（CALC）','Estimated dive depth on a cast (EST)':'抛投预估潜深（EST）',
+'Hooks':'鱼钩','Build mode':'制造方式','Show the checks':'显示检查项','✓ No issues':'✓ 无问题',
+'Floating':'浮水','Suspending':'悬浮','Sinking':'沉水','Surface':'水面','Dive':'潜深','est.':'估','Injection ABS':'注塑 ABS',
+'single':'单钩','std':'标准','none':'无',
+/* left panels */
+'Inputs':'输入','Lure family':'路亚类别','Design parameters':'设计参数','Retrieve and conditions':'收线与环境',
+'Identity, revision and colourway':'标识、版本与配色','Family':'类别',
+'Shape':'外形','Bill':'潜水唇','Hardware':'五金','Material & production':'材料与生产','Finish':'涂装','Components':'部件',
+'Nose & face':'鼻部与端面','Head & wire':'头部与钢丝','Blade':'叶片','Blades':'叶片','Props':'螺旋桨','Skirt & legs':'裙边与蛙腿',
+'Advanced':'高级','Show advanced parameters':'显示高级参数',
+'Advanced Bill parameters':'潜水唇高级参数','Advanced Material & production parameters':'材料与生产高级参数','Advanced Shape parameters':'外形高级参数',
+'Double-click to reset':'双击重置','Double-click to reset · [ ] to nudge, Shift ×{}':'双击重置 · 用 [ ] 微调，Shift ×{}',
+/* shape params */
+'Back height, above axis':'背部高度（轴线以上）','Belly depth, below axis':'腹部深度（轴线以下）','Body width (full)':'本体宽度（全宽）',
+'Widest point':'最宽处','% of length from the nose':'距鼻端的长度百分比','Max-thickness station':'最大厚度位置',
+'Cross-section: round ↔ flat-sided':'截面：圆 ↔ 扁侧','{} = round, {} = slab-sided':'{} = 圆，{} = 扁侧',
+'Cross-section at the nose':'鼻部截面','Cross-section at the tail':'尾部截面','Cross-section, middle':'中部截面',
+'Tail taper':'尾部收窄','higher = slimmer tail':'越大 = 尾部越细','Tail thickness':'尾部厚度',
+'Nose face':'鼻部端面','Nose face type':'鼻部端面类型','Face / cup diameter':'端面 / 杯口直径','Cup depth':'杯深','Face slant':'端面倾角',
+'concave recess into the nose':'鼻部内凹','lower lip forward (cup / chisel)':'下唇前伸（杯形 / 斜切）',
+'Round':'圆形','Flat':'平面','Cupped':'杯形','Cupped (popper)':'杯形（波扒）','Chisel':'斜切','Chisel (slanted flat)':'斜切（斜平面）','None':'无',
+/* bill */
+'Bill length (exposed)':'潜水唇长度（外露）','Bill width':'潜水唇宽度','Bill angle below body axis':'潜水唇与本体轴线夹角（向下）',
+'lower = deeper diving':'越小 = 潜得越深','Bill thickness':'潜水唇厚度','Bill material':'潜水唇材料',
+'Bill root position, from nose':'潜水唇根部位置（距鼻端）','Bill root position, from axis':'潜水唇根部位置（距轴线）',
+'Line tie, from bill root':'拉线环（距唇根）','Diving bill':'潜水唇','Bill root':'唇根',
+'Polycarbonate':'聚碳酸酯（PC）','FR{} circuit board':'FR{} 电路板','Glass':'玻璃',
+/* hardware */
+'Line tie':'拉线环','Line tie, from nose':'拉线环（距鼻端）','Line tie, from axis':'拉线环（距轴线）','Line tie, above the back':'拉线环（背部以上）',
+'Line tie (on the back), from nose':'拉线环（背部）距鼻端','Line tie (screw eye)':'拉线环（螺丝眼）','Line tie (bill)':'拉线环（潜水唇）',
+'Belly hanger':'腹钩挂点','Belly hanger, from nose':'腹钩挂点（距鼻端）','Tail hanger':'尾钩挂点','Tail hanger, inset from tail':'尾钩挂点（距尾端内缩）',
+'Hook type':'钩型','Hook size':'钩号','Belly hook size':'腹钩钩号','Tail hook size':'尾钩钩号','Double hook size':'双钩钩号',
+'Hook wire strength':'钩条强度','Standard wire':'标准钩条','{}X strong':'{}X 加强',
+'Treble':'三本钩','Treble (on ring)':'三本钩（挂环）','Double (on ring)':'双钩（挂环）','Inline single':'单钩（直排）','Inline single (on ring)':'单钩（挂环）',
+'Upturned double (weedless)':'上翘双钩（防挂）','Jig hook (rigid)':'铅头钩（固定）','Trailer hook':'拖尾钩','Yes (treble, same gap)':'是（三本钩，同钩距）',
+'Ballast':'配重','Ballast material':'配重材料','Ball diameter':'钢珠直径','Balls':'钢珠数','Ballast centre, from nose':'配重中心（距鼻端）',
+'Ballast centre, from axis':'配重中心（距轴线）','Ballast fixing':'配重固定方式','Glued in moulded pocket':'胶固于成型凹槽','Loose rattle chamber':'松动响珠仓',
+'Lead':'铅','Steel':'钢','Tungsten':'钨','Brass':'黄铜','Copper':'铜','Aluminium':'铝','Stainless steel':'不锈钢',
+'Rattle':'响珠','Rattle balls':'响珠','Rattle ball diameter':'响珠直径','Rattle material':'响珠材料','Rattle chamber':'响珠仓',
+'Rattle chamber, from nose':'响珠仓（距鼻端）','Rattle chamber, from axis':'响珠仓（距轴线）',
+'Split rings':'开口环','Eyes':'眼睛','Through-wire harness':'贯穿钢丝',
+'Dashed circles in the side view show how far each hook can swing. The belly hook must not reach the line tie or the tail hook.':'侧视图中的虚线圆表示每个钩的摆动范围。腹钩不能碰到拉线环或尾钩。',
+'− = below the axis':'− = 轴线以下','− = towards the belly':'− = 朝向腹部',
+/* material & production */
+'Prototype body material':'原型本体材料','Print wall':'打印壁厚','Print infill':'打印填充率','Body build':'本体构造',
+'Balsa wood':'巴沙木','Cedar wood':'雪松木','Jelutong wood':'Jelutong 木','PLA':'PLA','PLA (printed)':'PLA（打印）','PETG (printed)':'PETG（打印）',
+'PLA ({}D print)':'PLA（{}D 打印）','PETG ({}D print)':'PETG（{}D 打印）','ABS ({}D print)':'ABS（{}D 打印）','ASA ({}D print)':'ASA（{}D 打印）','Resin (SLA)':'树脂（SLA）',
+'Draft angle':'拔模角','Bond land (flange)':'粘合边（凸缘）','mm extra at seam':'接缝处额外 mm','extra wall at the seam':'接缝处加厚',
+'Alignment pins':'定位销','Preview mold halves (opened like a book)':'预览模具半模（像书一样打开）','Soft body wall':'软体壁厚','PVC wall':'PVC 壁厚',
+'Wood bodies count as solid, so print wall and infill are ignored. A printed body must be fully sealed: any leak changes the buoyancy completely.':'木质本体按实心计算，因此忽略打印壁厚和填充率。打印本体必须完全密封：任何渗漏都会彻底改变浮力。',
+'Injection mode: the body is a hollow ABS shell ({} g/cm³). Prototype material, print wall and infill apply to prototypes only.':'注塑模式：本体为空心 ABS 壳体（{} g/cm³）。原型材料、打印壁厚和填充率仅适用于原型。',
+'Prototype mode: mass uses the print / wood settings. Release always reports injection figures.':'原型模式：质量按打印 / 木材设置计算。发布始终报告注塑数据。',
+'Production process: Hard body, {}-half injection (ABS) or wood / print prototype.':'生产工艺：硬体，{} 半模注塑（ABS），或木制 / 打印原型。',
+'Production process: Lead / tungsten head cast + wire form + blades.':'生产工艺：铅 / 钨头铸造 + 钢丝成型 + 叶片。',
+'Production process: Soft PVC body, rotocast / injection (no halves).':'生产工艺：软 PVC 本体，旋转成型 / 注塑（无半模）。',
+'Production process: Stamped and pressed metal blank.':'生产工艺：冲压并压制的金属坯料。',
+'Wood':'木材','ABS':'ABS',
+/* finish */
+'Paint pattern':'涂装图案','Back colour':'背部颜色','Flank colour':'侧面颜色','Belly colour':'腹部颜色','Head colour':'头部颜色','Contrast head':'撞色头',
+'Gloss':'亮光','Matte':'哑光','Satin':'半哑光','Two-tone':'双色','Tiger bars':'虎纹','Trace image':'描摹图片','Tracing image (side profile)':'描摹图片（侧面轮廓）',
+'Tracing image offset X (mm)':'描摹图片 X 偏移（mm）','Tracing image offset Z (mm)':'描摹图片 Z 偏移（mm）','Tracing image opacity':'描摹图片不透明度',
+'Tracing image scale (mm per image pixel)':'描摹图片比例（每像素 mm）','opacity':'不透明度','scale':'比例',
+'Blade finish':'叶片表面','Buzz blade finish':'嗡嗡叶片表面','Nickel':'镍','Nickel (silver)':'镍（银色）','Gold':'金','Black nickel':'黑镍','Bright':'亮面',
+'Painted (body colour)':'喷漆（本体色）','Gold / black pupil':'金色 / 黑瞳',
+/* components (custom) */
+'Add any part to the body. Positions are mm from the nose (X) and from the axis (Z, + up). Mass, CG / CB and buoyancy include every part.':'可向本体添加任意部件。位置以距鼻端（X）和距轴线（Z，+ 向上）的 mm 表示。质量、重心 / 浮心和浮力均包含所有部件。',
+'Component to add':'要添加的部件','Add':'添加','Remove':'移除','Convert to editable':'转换为可编辑',
+'Copy this body into editable splines and its parts into the component list (custom family)':'把此本体复制为可编辑样条曲线，并把其部件加入部件列表（自定义类别）',
+'Replace the body with a blank ellipsoid of this size':'用该尺寸的空白椭球体替换本体','X from nose':'X（距鼻端）','Z from axis':'Z（距轴线）',
+'Hook hanger':'钩挂点','Ballast ball':'配重钢珠','Propeller':'螺旋桨','Buzz blade':'嗡嗡叶片','Spinner blade on clevis':'U 形夹旋转叶片','Weed guard':'防草挡',
+'Silicone skirt':'硅胶裙','Frog legs (silicone)':'蛙腿（硅胶）','Tail feather':'尾羽','Cup face (nose)':'杯形端面（鼻部）','Rattle balls (loose in a chamber)':'响珠（仓内松动）',
+/* view */
+'View':'视图','Camera':'相机','Side':'侧视','Top':'俯视','Fit':'适配','Fit the whole lure in the view (keeps the angle)':'把整个路亚放入视野（保持角度）',
+'Grid':'网格','X-ray':'透视','tie / hangers':'拉线环 / 挂点','ballast':'配重',
+'Swim controls':'游动控制','▶ Swim':'▶ 游动','■ Stop':'■ 停止','❚❚ Pause':'❚❚ 暂停','Swim (Space)':'游动（空格键）','Playback speed':'播放速度','{}× real':'{}× 实时',
+'Underwater scene':'水下场景','Underwater':'水下','UW':'水下','scene':'场景','Fish active':'鱼活跃','Fish':'鱼','active':'活跃',
+'Camera view':'相机视角','Camera view. Auto: above water for topwater lures, underwater for divers and sinkers':'相机视角。自动：水面饵用水上视角，潜水和沉水饵用水下视角',
+'Auto view':'自动视角','Above water':'水上','Waterline':'水线','Waterline (split)':'水线（分屏）',
+'Strike':'咬口','Make the nearest interested fish strike (game model)':'让最近的感兴趣的鱼发起攻击（游戏模型）','Strike events':'咬口事件',
+'Resize the bottom panel':'调整底部面板大小','Fish gallery':'鱼类图库','Fish gallery…':'鱼类图库…',
+'Inspect every species model with its size, habitat and hook guidance':'查看每个鱼种模型及其体型、栖息地和用钩建议',
+'Species':'鱼种','Previous species':'上一个鱼种','Next species':'下一个鱼种',
+/* bottom panel */
+'Side profile & hook swing':'侧面轮廓与钩摆动','Side profile with hook swing circles':'带钩摆动圆的侧面轮廓','Profile editor':'轮廓编辑器',
+'Profile editor tools':'轮廓编辑工具','Side profile editor: top and belly curves':'侧面轮廓编辑器：背部与腹部曲线','Top view editor: half-width curve':'俯视编辑器：半宽曲线',
+'Side · top & belly':'侧视 · 背部与腹部','Top · half width':'俯视 · 半宽','Half width':'半宽','Point':'点','Points':'点',
+'Undo':'撤销','Redo':'重做','Undo profile edit':'撤销轮廓编辑','Redo profile edit':'重做轮廓编辑','Delete point':'删除点','Delete the selected point':'删除选中的点',
+'drag points · double-click a curve to add · select + Delete to remove · Ctrl+Z / Ctrl+Y':'拖动点 · 双击曲线添加 · 选中后按 Delete 删除 · Ctrl+Z / Ctrl+Y',
+'Curve shown in the table':'表中显示的曲线','top z':'背部 z','x mm':'x mm',
+'grid {} mm · dashed = hook swing reach':'网格 {} mm · 虚线 = 钩摆动范围','grid {} mm':'网格 {} mm',
+'Dive curve':'潜水曲线','Dive curve: depth against distance':'潜水曲线：深度与距离','distance from you (m)':'离你的距离（m）','you':'你',
+/* right: design */
+'Results':'结果','Checks':'检查','Performance':'性能','computed':'计算值','rule-of-thumb':'经验值','game model':'游戏模型',
+'CALC':'计算','EST':'估算','MODEL':'模型','calc':'计算','sim':'模拟',
+'Total weight':'总重量','ready to fish · QC ±{}':'整备 · QC ±{}','Displacement':'排水体积','fresh water':'淡水','Self-righting':'自扶正',
+'At rest':'静止姿态','Depth · cast':'潜深 · 抛投','Depth · troll':'潜深 · 拖钓','On a pause':'停顿时','vertical speed':'垂直速度',
+'Swim':'游动','Expected action':'预期泳姿','Family estimates':'类别估算',
+'EST figures are rule-of-thumb estimates calibrated on typical floating crankbaits. Confirm them in a tank. The buoyancy maths assumes a sealed body, fully under water.':'EST 数值是以典型浮水胖子校准的经验估算，请在水箱中确认。浮力计算假设本体密封并完全没入水中。',
+'all clear':'全部通过','DFM (injection mold) checks are being computed…':'正在计算 DFM（注塑模具）检查…','Computing…':'计算中…',
+'level':'水平','Rest level':'静止水平','on the surface':'在水面','on the surface (waterline solve)':'在水面（水线求解）','surface':'水面',
+'Sits upright and level, points up':'直立水平，钩尖朝上','rises on a pause':'停顿时上浮','Rises ~{} cm/s':'上浮约 {} cm/s','Sinks ~{} cm/s':'下沉约 {} cm/s',
+'Wide, thumping wobble':'大幅度强力摆动','Wobble':'摆动','Vibration':'震动','Flutters':'翻飞','flutters':'翻飞','Flutter on the fall':'下落时翻飞',
+'Flutters on the drop (no spinning)':'下落时翻飞（不旋转）','Helicopter fall':'直升机式下落','helicopters':'直升机式旋转',
+'Walk-the-dog':'Z 字狗走','walk-the-dog':'Z 字狗走','Surface action':'水面动作','Chug sound':'吐泡声','spits and chugs':'喷水吐泡',
+'wake / walk':'尾迹 / 狗走','splash-down':'落水','Starts spinning':'开始旋转','Blade speed':'叶片转速','Prop speed':'桨转速',
+'Running depth':'泳层','Sink rate':'下沉速度','Float rate':'上浮速度','Float rate (rise)':'上浮速度','Float / sink rate':'上浮 / 下沉速度',
+'Weedless index':'防挂指数','Walk / plane index':'狗走 / 滑行指数','Pop / spit strength':'吐泡 / 喷水强度','noise / spray {} / {}':'噪声 / 水花 {} / {}',
+'surface noise {} / {}':'水面噪声 {} / {}','Rest attitude':'静止姿态','Countdown depth':'倒数下沉深度',
+/* right: analyse */
+'Mass & balance':'质量与平衡','Centre of gravity / buoyancy':'重心 / 浮心','Hook clearance':'钩间隙','DFM · injection mold':'DFM · 注塑模具',
+'DFM · cast head + wire form':'DFM · 铸造头 + 钢丝成型','DFM · soft pvc rotocast':'DFM · 软 PVC 旋转成型','DFM · stamped + cup-pressed blank':'DFM · 冲压 + 杯形压制坯料',
+'Part':'部件','Mass g':'质量 g','Total':'合计','Item':'项目','Value':'数值','Criterion':'判据','Target':'目标',
+'Centre of gravity (x, y, z)':'重心（x, y, z）','Centre of buoyancy (x, y, z)':'浮心（x, y, z）','CG (x, z)':'重心（x, z）','CB (x, z)':'浮心（x, z）',
+'CG behind CB (rest attitude)':'重心在浮心之后（静止姿态）','CB above CG (target ≥ {})':'浮心高于重心（目标 ≥ {}）',
+'Body':'本体','Body solid':'本体实体','Eyes ({}D sticker)':'眼睛（{}D 贴纸）','Paint + epoxy':'油漆 + 环氧','Paint + epoxy coat':'油漆 + 环氧涂层',
+'Belly hanger → line tie (needs > reach + {})':'腹钩挂点 → 拉线环（需 > 摆动范围 + {}）','Belly hanger → tail hanger':'腹钩挂点 → 尾钩挂点',
+'First hanger → line tie (needs > reach + {})':'第一挂点 → 拉线环（需 > 摆动范围 + {}）','Hanger → hanger':'挂点 → 挂点',
+'Hook points vs back':'钩尖与背部','Hook point height above the back':'钩尖高出背部的高度','Hook length vs body height (≥ {} %)':'钩长与本体高度之比（≥ {} %）',
+'ok':'正常','marginal':'临界','yes':'是','no':'否','Yes':'是','No':'否','clear':'通过',
+/* right: simulate */
+'Retrieve results':'收线结果','Max depth':'最大深度','In target zone':'处于目标水层','Reel speed':'收线速度','Swim at speed':'该速度下的泳姿',
+'Strike session':'咬口记录','No strikes yet. Press ▶ Swim (or Space), then Strike.':'还没有咬口。先按 ▶ 游动（或空格键），再按“咬口”。',
+'The fish game is an illustrative model for comparing designs (hook size, clearance, strength). It is not a catch-rate prediction.':'钓鱼游戏是用于比较设计（钩号、间隙、强度）的示意模型，并不预测上鱼率。',
+'Hook-up odds per Toman strike':'每次托曼咬口的中鱼率','Hook-up odds per Haruan strike':'每次生鱼咬口的中鱼率','Hook-up odds per Sebarau strike':'每次西巴劳咬口的中鱼率',
+'Hook-up odds per Raja / peacock bass strike':'每次孔雀鲈咬口的中鱼率','Hook-up odds per toman strike':'每次托曼咬口的中鱼率',
+'Retrieve':'收线','Retrieve style':'收线方式','Steady retrieve':'匀速收线','Slow roll':'慢收','Stop & go':'停停走走','stop & go':'停停走走',
+'Twitch & rip':'抽动与急拉','Pump / yo-yo':'抽竿 / 溜溜球','Yo-yo / lift & drop':'溜溜球 / 抬竿落下','Countdown':'倒数下沉','Countdown + steady':'倒数下沉 + 匀速',
+'Burn & kill':'快收急停','Burn (fast steady)':'快速匀收','Pop & pause':'吐泡停顿','Walk-the-dog (twitch cadence)':'Z 字狗走（抽动节奏）','Slow float':'慢浮',
+'Cranking pace':'摇轮速度','handle turns per second':'每秒摇轮圈数','Turns before a pause':'停顿前圈数','turns':'圈','Pause / slack length':'停顿 / 松线时长',
+'Twitch cadence':'抽动节奏','recommended rod twitches':'推荐抽竿次数','sinking lures: seconds before the retrieve':'沉水饵：开始收线前的秒数',
+'Reel gear ratio':'渔轮速比','{}:{} standard':'{}:{} 标准','{}:{} power':'{}:{} 力量型','{}:{} fast':'{}:{} 快速','{}:{} extra fast':'{}:{} 超快','{}:{} ultra fast':'{}:{} 极快',
+'Spool diameter':'线杯直径','line on the spool':'线杯上的线','Main line':'主线','PE {} braid':'PE {} 编织线','Mono {} lb':'尼龙 {} lb',
+'Cast & water':'抛投与水域','Cast distance':'抛投距离','Rod tip height':'竿尖高度','Bottom depth':'水底深度','Target depth':'目标深度',
+'Water':'水域','Fresh (lake / river)':'淡水（湖 / 河）','fresh (lake / river)':'淡水（湖 / 河）','Brackish (estuary)':'半咸水（河口）','Sea water':'海水',
+'Water clarity':'水体透明度','Clear':'清澈','Tea-stained (reservoir)':'茶色（水库）','Muddy':'浑浊',
+'Fishing conditions':'钓况','Target fish':'目标鱼','Target species':'目标鱼种','Predator':'掠食鱼',
+'These are angler / test settings. They are saved in the':'这些是钓手 / 测试设置，保存在设计文件的',
+'section of the design file and are never locked by a release.':'部分中，发布时不会被锁定。',
+/* release */
+'Identity & revision':'标识与版本','Model family code':'型号类别代码','Colourway':'配色','Colour code':'颜色代码','Colour name':'颜色名称',
+'Pantone / RAL reference':'Pantone / RAL 参考','Pantone / RAL':'Pantone / RAL','Layer stack':'涂层叠层','Paint complexity':'涂装复杂度',
+'Paint pattern and preview colours are in Design → Finish. Changing the pattern pre-fills this colourway.':'涂装图案和预览颜色在“设计 → 涂装”中。更改图案会预填此配色。',
+'Status':'状态','Revision & sign-off':'版本与签核','Release gate':'发布关卡','Role':'角色','Name':'姓名','Date':'日期',
+'Drawn':'制图','Drawn: name':'制图：姓名','Drawn: date (YYYY-MM-DD)':'制图：日期（YYYY-MM-DD）','Checked: name':'校核：姓名',
+'Checked: date (YYYY-MM-DD)':'校核：日期（YYYY-MM-DD）','Approved: name':'批准：姓名','Approved: date (YYYY-MM-DD)':'批准：日期（YYYY-MM-DD）',
+'drawn by, name':'制图人姓名','drawn, date':'制图日期','checked by, name':'校核人姓名','checked, date':'校核日期','approved by, name':'批准人姓名','approved, date':'批准日期','name':'姓名',
+'Log changes now':'立即记录变更','No logged changes yet.':'尚无变更记录。','Save also logs the spec diff.':'保存时也会记录规格变更。',
+'NOT FOR PRODUCTION – Concept':'非生产用 – 概念','NOT FOR PRODUCTION – Concept · exports carry this watermark':'非生产用 – 概念 · 导出文件带有此水印',
+'T{}, Golden and Released are blocked until:':'T{}、金样和已发布状态在以下条件满足前被锁定：',
+'Released: spec, colourway and BOM are locked. Change the status to edit; the revision letter then goes up.':'已发布：规格、配色和 BOM 已锁定。修改状态即可编辑，版本字母随后会递增。',
+'Tech-pack drawing preview (A{})':'技术包图纸预览（A{}）','· read-only; generated from the spec':'· 只读；由规格生成','Drawing sheet':'图纸页','Sheet {}':'第 {} 页',
+'Production figures (injection, fresh water)':'生产数据（注塑，淡水）','Production figures (cast head + wire form)':'生产数据（铸造头 + 钢丝成型）',
+'Production figures (soft pvc rotocast)':'生产数据（软 PVC 旋转成型）','Production figures (stamped + cup-pressed blank)':'生产数据（冲压 + 杯形压制坯料）',
+'These figures are for Injection ABS (production) in fresh water. Design is set to Prototype mode.':'这些数据针对淡水中的注塑 ABS（量产）。设计当前为原型模式。',
+'Shown for Injection ABS (the design is in Prototype mode).':'按注塑 ABS 显示（设计当前为原型模式）。',
+'Weight':'重量','Weight ready to fish':'整备重量','Weight, ready to fish':'整备重量','Class · net buoyancy':'等级 · 净浮力','Class ({} °C fresh)':'等级（{} °C 淡水）',
+'Displacement · net buoyancy':'排水体积 · 净浮力','Shell (exact) · body mass':'壳体（精确）· 本体质量','Running depth @ {} m/s':'{} m/s 时的泳层',
+'Depth (cast)':'潜深（抛投）','Depth (PE {} braid)':'潜深（PE {} 编织线）','Action (est.)':'泳姿（估）','Action est.':'泳姿估算','Lure envelope incl. hooks':'含钩外形尺寸',
+'Old estimate area × wall':'旧估算 面积 × 壁厚','body_L · body_R volume':'body_L · body_R 体积','Mesh check L / R / shell':'网格检查 左 / 右 / 壳体',
+'Bill of materials':'物料清单','Part no.':'零件号','Description':'描述','Qty':'数量','Spec':'规格','Supplier':'供应商','Unit USD':'单价 USD','Ext USD':'小计 USD',
+'Finish':'涂装','Size':'尺寸','Rated kg':'额定 kg','Lead d':'交期（天）','MOQ':'起订量',
+'· edit any cell; orange = overridden; clear a cell to reset. Hardware mass edits feed the weight model.':'· 可编辑任意单元格；橙色 = 已覆盖；清空单元格即可重置。五金质量的修改会进入重量模型。',
+'Costing':'成本核算','Currency':'币种','Incoterm / port':'贸易术语 / 港口','Rates dated (YYYY-MM-DD)':'费率日期（YYYY-MM-DD）',
+'Moulding machine rate':'成型机费率','Moulding cycle time':'成型周期','Cavities (L+R sets per shot)':'模穴数（每模 L+R 套数）','Runner / regrind loss':'流道 / 回料损耗',
+'Scrap allowance':'报废余量','Assembly labour':'装配人工','Factory margin → FOB':'工厂利润 → FOB','Variable cost (unit cost)':'变动成本（单位成本）',
+'FOB excl. tooling':'FOB（不含模具）','FOB excl.':'FOB（不含）','FOB incl. amort.':'FOB（含摊销）','Tooling/u (info)':'模具/件（参考）',
+'Tooling, one-off NRE (not in FOB):':'模具，一次性 NRE（不含在 FOB 内）：','Margin {} % (on unit cost only)':'利润 {} %（仅按单位成本）',
+'Packaging':'包装','Blister + card':'吸塑 + 卡纸','Card width':'卡纸宽度','Card height':'卡纸高度','Card copy EN':'卡纸文案 英文','Card copy BM':'卡纸文案 马来文',
+'Inner box qty':'内盒数量','Carton qty':'外箱数量','Inner box ({} pcs)':'内盒（{} 件）','Carton ({} pcs, {} inners)':'外箱（{} 件，{} 内盒）','Blister inner (+{} mm)':'吸塑内尺寸（+{} mm）',
+'EAN{} not set':'未设置 EAN{}','EAN{}: not set':'EAN{}：未设置','Note: EAN{} not set':'注意：未设置 EAN{}',
+'QC · tank test':'QC · 水箱测试','QC / tank test':'QC / 水箱测试','Import measured CSV':'导入实测 CSV','Import measured tank-test CSV':'导入实测水箱测试 CSV',
+'tank_test.csv template':'tank_test.csv 模板','Fill in tank_test.csv (one row per sample) and import it to get a pass / fail table.':'填写 tank_test.csv（每个样品一行）并导入，即可得到合格 / 不合格表。',
+'Material & mold':'材料与模具','DFM checks':'DFM 检查','DFM':'DFM','Tol':'公差','Unit':'单位','Lab':'实验室','In-house':'自制','Hand assembly':'手工装配',
+'Spec':'规格','Process:':'工艺：','Section':'截面','Type':'类型','Material':'材料','Hook':'钩','Hook(s)':'钩',
+/* modals */
+'Design JSON':'设计 JSON','File contents':'文件内容','Copy':'复制','Close':'关闭','Cancel':'取消','Delete':'删除','Delete design?':'删除设计？',
+'Pick a family to start from its original preset (every parameter stays editable), or start from scratch with your own spline body.':'选择一个类别，从其原始预设开始（所有参数仍可编辑），或从零开始用自己的样条曲线本体。',
+'Lure families':'路亚类别','Typical:':'典型目标：',
+/* toasts */
+'A curve needs at least {} points':'曲线至少需要 {} 个点','A download prompt is already open':'已有一个下载提示打开','Building release pack…':'正在生成发布包…',
+'Copied':'已复制','Could not read that file':'无法读取该文件','Download cancelled':'下载已取消','Download unavailable here':'此处无法下载',
+'Downloads are not available in this view. Open the page on claude.ai.':'此视图不支持下载，请在 claude.ai 上打开页面。',
+'End points cannot be deleted (set their value to {} for a rounded end)':'端点不能删除（把值设为 {} 可得到圆头）','Give the design a name first':'请先给设计命名',
+'PDF library unavailable here. Use techpack.html and print to PDF.':'此处无法使用 PDF 库。请用 techpack.html 打印为 PDF。','Pick a saved design to delete':'请选择要删除的已保存设计',
+'Press Ctrl+C to copy':'按 Ctrl+C 复制','Select a point first':'请先选择一个点','Tank test imported':'水箱测试已导入','That change could not be built and was undone':'该更改无法生成，已撤销',
+'That file is not valid JSON':'该文件不是有效的 JSON','Zip library failed to load':'Zip 库加载失败','Saved in this browser':'已保存在此浏览器',
+'This browser blocks local saving. Use Export instead.':'此浏览器禁止本地保存，请改用导出。','No spec changes since the last log':'自上次记录以来规格没有变化',
+'Released: spec inputs are locked':'已发布：规格输入已锁定',
+'Cup face added: raise the nose values of the top / belly / width curves to open the face':'已添加杯形端面：提高背部 / 腹部 / 宽度曲线的鼻端值以打开端面',
+/* design checks */
+'Sinks. If you want a floater that backs out of snags, reduce the ballast or hook weight, or use more infill air.':'会下沉。若想要遇障碍能浮起脱困的浮水饵，请减少配重或钩重，或提高填充中的空气比例。',
+'Close to neutral. Paint and water temperature can tip it either way, so tank-test it.':'接近中性浮力。油漆和水温都可能改变结果，请做水箱测试。',
+'The ballast sticks outside the body at this position or size.':'在此位置或尺寸下，配重伸出了本体外。',
+'A long printed bill under {} mm thick can snap on a strike or against timber. Use polycarbonate or FR{}, or a thicker bill.':'厚度低于 {} mm 的长打印潜水唇可能在咬口或撞木头时折断。请用聚碳酸酯或 FR{}，或加厚潜水唇。',
+'The line-tie hole is off the bill. Adjust "Line tie, from bill root".':'拉线环孔超出了潜水唇。请调整“拉线环（距唇根）”。',
+'For a long-bill diver, moving the tie further out on the bill (≈{}–{} % of bill length) usually helps it dive.':'对于长唇深潜饵，把拉线环向唇外移（约唇长的 {}–{} %）通常有助于下潜。',
+'There are no hooks fitted.':'没有安装鱼钩。','The belly hook only just clears the line tie. A pause can make it foul.':'腹钩刚好避开拉线环，停顿时可能缠线。',
+'The first hook only just clears the line tie.':'第一个钩刚好避开拉线环。',
+'The hook points clear the line tie and each other (belly reach {} mm).':'钩尖避开了拉线环且互不干涉（腹钩摆动范围 {} mm）。',
+'It self-rights well: CG is {} mm below CB.':'自扶正良好：重心比浮心低 {} mm。','It self-rights: CG is {} mm below CB.':'可以自扶正：重心比浮心低 {} mm。',
+'Only just self-righting ({} mm). Lower ballast tracks straighter.':'勉强能自扶正（{} mm）。配重放低会游得更直。',
+'CG is only {} mm below CB, so the lure will roll or blow out. Move the ballast lower or add weight.':'重心只比浮心低 {} mm，路亚会翻滚或失控。请把配重下移或加重。',
+'The lure is only just stable ({} mm). Lower ballast will make it track straighter at speed.':'路亚勉强稳定（{} mm）。配重放低能让它高速时游得更直。',
+'For toman or snakehead, use {}X–{}X strong #{}–{}/{} trebles or heavy inline singles.':'钓托曼或生鱼，请用 {}X–{}X 加强 #{}–{}/{} 三本钩或重型直排单钩。',
+'Inline singles are lighter and snag less in timber, but the lure will float a little higher. That is already counted.':'直排单钩更轻，在木桩区更不易挂底，但路亚会浮得略高，这一点已计入。',
+'The belly hanger is far from the usual {}–{} % of body length.':'腹钩挂点偏离了常见的本体长度 {}–{} % 位置。',
+'Walls under {} mm tend to leak. Leaks ruin the buoyancy.':'壁厚低于 {} mm 容易渗漏，渗漏会破坏浮力。',
+'Injection: no hollow cavity fits at this wall thickness.':'注塑：在此壁厚下无法放入空腔。',
+'Injection: the bill slot cannot be molded at this bill root. See Analyse → DFM.':'注塑：在此唇根位置无法成型潜水唇槽。见“分析 → DFM”。',
+'Through-wire harness Ø{} mm SS{}, {} mm, rated about {} kg.':'贯穿钢丝 Ø{} mm SS{}，{} mm，额定约 {} kg。',
+'Ballast balls fit inside the cavity ({} mm clearance).':'配重钢珠可放入空腔（间隙 {} mm）。',
+'Outer surface has ≥ {}° draft everywhere except the parting line itself.':'除分型线外，外表面各处拔模角均 ≥ {}°。',
+'Mesh check: body_L watertight, body_R watertight, shell watertight.':'网格检查：body_L 水密，body_R 水密，壳体水密。',
+'Body solid watertight; hollow shell and mold blocks are generated with the export.':'本体实体水密；空心壳体和模块随导出生成。',
+'Pressed blank solid watertight.':'压制坯料实体水密。','Head solid watertight ({} cm³).':'头部实体水密（{} cm³）。','watertight ✓':'水密 ✓',
+'No bill on this family: the halves have no bill slot.':'此类别没有潜水唇：半模上没有唇槽。',
+'Wire anchor A sits outside the head: move it or enlarge the head.':'钢丝锚点 A 在头部外：请移动它或加大头部。',
+/* misc words */
+'Nose':'鼻部','Belly':'腹部','Tail':'尾部','Top (back)':'背部','Shape':'外形','Lure':'路亚','Level':'水平','Lifts from':'起浮于','Planes from':'滑行于',
+'Blade starts at':'叶片起转于','Blades start spinning at':'叶片开始旋转于','Props start spinning at':'螺旋桨开始旋转于','Planes and churns the surface from':'从以下速度开始滑行并搅动水面',
+'On the drop':'下落时','Tracks true over {} m':'{} m 内直线游动','Tracks true over {} m (no roll)':'{} m 内直线游动（不翻滚）',
+'blade lift ≥ weight: rises above this speed':'叶片升力 ≥ 重量：高于此速度时上浮','lift ≥ weight: stays on top above this':'升力 ≥ 重量：高于此速度时保持在水面',
+'blades turn on a slack line':'松线时叶片转动','blades turn on a slack-line fall':'松线下落时叶片转动','blades turning on the drop':'下落时叶片转动',
+'cupped blank rocks on the fall':'杯形坯料下落时摇摆','flat blank: wobbles by design':'平板坯料：按设计摆动','fat body → strong vibration':'胖本体 → 强震动',
+'keel = hook + wire; tracks on the arm':'龙骨 = 钩 + 钢丝；沿钢丝臂直线游动','points ride against the soft back':'钩尖贴在柔软背部','pressed dome':'压制拱形',
+'add a cup face, props or blades for noise':'加杯形端面、螺旋桨或叶片以增加声响','cup depth and plate area vs weight':'杯深与板面积相对重量',
+'higher = slower, more spray':'越大 = 越慢、水花越多','in water (CG–CB line)':'水中（重心–浮心连线）','loose rattle':'松动响珠','glued in pocket':'胶固于凹槽',
+'injection shell':'注塑壳体','Body (ABS)':'本体（ABS）','upturned double':'上翘双钩','Treble hook':'三本钩','Treble hook, belly':'三本钩，腹部','Treble hook, tail':'三本钩，尾部',
+'Upturned double (weedless) hook':'上翘双钩（防挂）','Jig hook (in the head) hook':'铅头钩（铸在头部）','Hook (moulded in the head)':'钩（铸在头部）',
+'Blade size':'叶片尺寸','Blade position':'叶片位置','Clevis blade':'U 形夹叶片','Clevis blade (arm)':'U 形夹叶片（钢丝臂）','Clevis blade size':'U 形夹叶片尺寸',
+'Tip blade':'尖端叶片','Tip blade (swivel)':'尖端叶片（转环）','Tip blade size':'尖端叶片尺寸','Tip blade helicopters on a slack drop':'松线下落时尖端叶片直升机式旋转',
+'Willow (slim, flash)':'柳叶（细长，闪光）','Colorado (round, thump)':'科罗拉多（圆形，重击感）','Indiana (oval)':'印第安纳（椭圆）','Clacker':'响板',
+'Buzz blade wings':'嗡嗡叶片翼数','Buzz blade diameter':'嗡嗡叶片直径','Buzz blade on arm':'钢丝臂上的嗡嗡叶片','{} wings':'{} 翼',
+'Upper arm length':'上臂长度','Upper arm angle':'上臂角度','Upper-arm angle to the hook':'上臂与钩的夹角','Wire form':'钢丝成型','Wire arm + blades':'钢丝臂 + 叶片',
+'Head shape':'头部形状','Head length':'头部长度','Head height, above hook axis':'头部高度（钩轴以上）','Head depth, below hook axis':'头部深度（钩轴以下）',
+'Head width (full)':'头部宽度（全宽）','above the hook axis':'钩轴以上','Bullet':'子弹头','Arrow (flat-sided, pointed)':'箭头（扁侧，尖头）',
+'Skirt length':'裙边长度','Skirt strands':'裙边丝数','Leg length':'腿长','Strands per leg':'每条腿丝数','Skirt + collar':'裙边 + 束环',
+'Prop diameter':'桨直径','Prop blades':'桨叶数','Prop pitch angle':'桨距角','Prop material':'桨材料','Front prop':'前桨','Rear prop':'后桨',
+'Spoon length':'亮片长度','Spoon width (full)':'亮片宽度（全宽）','Blank thickness':'坯料厚度','Blank material':'坯料材料','Brass (stamped)':'黄铜（冲压）',
+'Steel (stamped)':'钢（冲压）','Sheet metal (brass / steel)':'金属板（黄铜 / 钢）','Developed blank':'展开坯料','Blank':'坯料',
+'Soft PVC (hollow)':'软 PVC（空心）','PVC, hollow':'PVC，空心','Lead (cast)':'铅（铸造）','Lead alloy':'铅合金','Tungsten (sintered)':'钨（烧结）',
+'Hook points sit +{} mm against the back at x {} (weedless, still exposed on a bite).':'钩尖在 x {1} 处贴背部 +{0} mm（防挂，咬口时仍会露出）。',
+'Stainless / brass':'不锈钢 / 黄铜','Zinc / bare':'锌 / 裸金属','Bare':'裸露','Raw':'原色','Plating':'电镀','Plating / finish':'电镀 / 表面处理',
+'Eye Ø{} L / R':'眼睛 Ø{} 左 / 右','Hardware (hooks, rings, wire, ballast, eyes)':'五金（钩、环、钢丝、配重、眼睛）',
+'Hardware (hooks, rings, wire, ballast, props, eyes …)':'五金（钩、环、钢丝、配重、螺旋桨、眼睛…）','Glue, primer':'胶水、底漆','Glue, primer, bill adhesive':'胶水、底漆、潜水唇胶',
+'Body halves (ABS + runner)':'本体半模件（ABS + 流道）','Bill (sheet + cutting)':'潜水唇（板材 + 切割）','Paint (airbrush vinyl)':'油漆（喷笔乙烯基）',
+'Powder paint':'粉末涂料','Powder paint + cure':'粉末涂料 + 固化','Cast head (metal + casting + trim)':'铸造头（金属 + 铸造 + 修边）','Soft body (PVC + rotocast cycle)':'软体（PVC + 旋转成型周期）',
+'Legs + insertion':'腿 + 插装','Legs + hook insertion':'腿 + 插钩','Blank (sheet + {} press strokes)':'坯料（板材 + {} 次冲压）',
+'Body mold ({}-half)':'本体模具（{} 半模）','Head mold ({}-half, aluminium)':'头部模具（{} 半模，铝）','Rotocast mold ({}-part)':'旋转成型模具（{} 件）',
+'Bill die / jig':'潜水唇模 / 治具','Blanking die':'落料模','Cup forming die':'杯形成型模','Wire-forming jig':'钢丝成型治具','Side-action slide (cup / faced nose)':'侧抽滑块（杯形 / 端面鼻部）',
+'Bill cutting':'潜水唇切割','Casting + trimming':'铸造 + 修边','Rotocast cycle':'旋转成型周期','Press stroke':'冲压行程','Cup press · strip':'杯形压制 · 条料',
+'USD':'USD','pcs':'件','sets':'套','kg':'kg','mm':'mm','cm/s':'cm/s','Hz':'Hz',
+/* swim info & sim text fragments */
+'at {} turns/s. It reaches a max of':'，每秒 {} 圈。它最深到达','at {} turns/s. It stays':'，每秒 {} 圈。它保持在','at {} turns/s. It counts down for':'，每秒 {} 圈。它先倒数下沉',
+'of the time in the target zone. A full retrieve takes':'的时间处于目标水层。完整收线一次需要','of the time in the target zone. There are':'的时间处于目标水层。共有',
+'of the time in the target zone · it digs into the bottom for':'的时间处于目标水层 · 它触底刨地',
+'speed changes, which trigger reaction strikes. A full retrieve takes':'次速度变化，可激发反射性咬口。完整收线一次需要',
+'. It spends':'。它有','. Press':'。按',', {} m from you, and spends':'，离你 {} m，并有','(or Space) to watch it.':'（或空格键）观看。','(or Space) to watch it underwater.':'（或空格键）在水下观看。',
+'(sinks ~{} cm/s), then reaches a max of':'（下沉约 {} cm/s），然后最深到达','of line per handle turn,':'每圈收线',
+'(good for deflecting off cover, but snags are possible). A full retrieve takes':'（利于碰撞障碍物后弹开，但也可能挂底）。完整收线一次需要',
+'on a {}:{} reel:':'用 {}:{} 渔轮：','({} in) of line per handle turn, so':'（{} 英寸）每圈收线，因此',
+'of a {} s retrieve':'（共 {} 秒收线）','after {} s (bottom {} m)':'{} 秒后（水底 {} m）','max {} m':'最深 {} m','±{} m band':'±{} m 范围','target {} m ±{}':'目标 {} m ±{}',
+'target {} ±{} m ✓':'目标 {} ±{} m ✓','target {} ±{} m ✗':'目标 {} ±{} m ✗',
+'; blade / body lift balances its weight at about':'；叶片 / 本体升力在约以下速度时与重量平衡','Planes ≥ {} m/s · {} rpm':'滑行 ≥ {} m/s · {} rpm',
+'glide ≈ {} cm each side':'每侧滑动约 {} cm','Pops and spits on a {} cm pull':'拉 {} cm 时吐泡喷水','Sinks {} cm/s · runs {} m':'下沉 {} cm/s · 泳层 {} m','Runs {} m · blade {} rpm':'泳层 {} m · 叶片 {} rpm',
+'{} m cast · {} m troll':'抛投 {} m · 拖钓 {} m','{} s countdown, steady retrieve ≈ {} m/s':'倒数 {} 秒，匀速收线约 {} m/s','{} s countdown, slow roll ≈ {} m/s':'倒数 {} 秒，慢收约 {} m/s',
+'countdown + steady ≈ {} m/s, {} m in':'倒数 + 匀速约 {} m/s，入水 {} m',
+'Rests {}° tail-down: good for walk-the-dog.':'静止时尾部下沉 {}°：适合 Z 字狗走。','{}° nose-down':'鼻部朝下 {}°','{}° tail-down':'尾部朝下 {}°',
+'Rest {}° tail-down':'静止 尾部朝下 {}°','Rest {}° tail-down · walk {}/{}':'静止 尾部朝下 {}° · 狗走 {}/{}','Rest {}° tail-down · pop {}/{}':'静止 尾部朝下 {}° · 吐泡 {}/{}',
+'Rest {}° tail-down · props {} rpm':'静止 尾部朝下 {}° · 螺旋桨 {} rpm','Rest {}° tail-down · weedless {}/{}':'静止 尾部朝下 {}° · 防挂 {}/{}','Rest {}° nose-down · weedless {}/{}':'静止 鼻部朝下 {}° · 防挂 {}/{}',
+'{} g net buoyancy · class S':'净浮力 {} g · S 级（沉水）','+{} g net buoyancy · class F':'净浮力 +{} g · F 级（浮水）','{} g net buoyancy · class S · ≈ {}/{} oz':'净浮力 {} g · S 级 · 约 {}/{} oz',
+'{} checks passed / info':'{} 项检查通过 / 信息','{} check passed / info':'{} 项检查通过 / 信息',
+'{} errors · {} warnings':'{} 个错误 · {} 个警告','{} error · {} warning':'{} 个错误 · {} 个警告','{} errors · {} warning':'{} 个错误 · {} 个警告','{} error · {} warnings':'{} 个错误 · {} 个警告',
+'✕ {} issues':'✕ {} 个问题','✕ {} issue':'✕ {} 个问题','! {} issues':'! {} 个问题','! {} issue':'! {} 个问题',
+'Checks: {} errors, {} warnings (design and DFM). Show checks.':'检查：{} 个错误，{} 个警告（设计与 DFM）。显示检查项。',
+'Hooks {}× {}':'鱼钩 {}× {}','{} USD':'{} USD','{} rpm':'{} rpm','{} cm':'{} cm','{} mm':'{} mm',
+'Undo ({})':'撤销（{}）','Remove Ballast {}':'移除配重 {}','Remove Hook hanger {}':'移除钩挂点 {}','Remove Line tie (screw eye) {}':'移除拉线环（螺丝眼）{}',
+'Blank ellipsoid {} × {} × {} mm':'空白椭球体 {} × {} × {} mm','Status: Concept':'状态：概念','Status: Checked':'状态：已校核','Status: Approved':'状态：已批准','Status: Golden':'状态：金样',
+'Language':'语言',
+/* family descriptions */
+'Diving lip: swims down on the retrieve, floats up on a pause.':'潜水唇：收线时下潜，停顿时上浮。',
+'Lofted floating body with a diving bill; dives on the retrieve and floats up on a pause.':'带潜水唇的浮水本体；收线时下潜，停顿时上浮。',
+'Sinks; tight high-speed shimmy and rattle at any depth.':'沉水；在任意水层都有高频细碎震动和响珠声。',
+'Deep, flat-sided sinking body with a line tie on the back; tight high-frequency shimmy and rattles.':'高体扁侧沉水本体，拉线环在背部；高频细碎震动并带响珠。',
+'Cupped face spits and pops water on short pulls.':'杯形端面在短促拉动时喷水吐泡。',
+'Floating body with a concave cupped face that spits and chugs water on short pulls.':'带内凹杯形端面的浮水本体，短促拉动时喷水吐泡。',
+'Walks side to side on the surface with rod twitches.':'抽竿时在水面左右 Z 字摆动。',
+'Slim floating stickbait with a tail weight: rests tail-down and walks side to side on rod twitches.':'带尾部配重的细长浮水铅笔：静止时尾部下沉，抽竿时左右摆动。',
+'Props spin and spray on a steady pull across the top.':'匀速拉过水面时螺旋桨旋转并溅起水花。',
+'Floating cigar body with propellers on a through-shaft that spin and spray on a steady pull.':'雪茄形浮水本体，贯穿轴上装有螺旋桨，匀速拉动时旋转溅水。',
+'Hard frog with a blade and kicking legs; rides weedless.':'带叶片和踢水蛙腿的硬体蛙；防挂草。',
+'Short, flat floating frog with a spinner blade, silicone legs and an upturned weedless double hook.':'短扁的浮水蛙，带旋转叶片、硅胶蛙腿和上翘防挂双钩。',
+'Hollow soft body slides over weed and collapses on the bite.':'空心软体可滑过水草，咬口时被压扁。',
+'Hollow soft-PVC body over a double hook that rides points-up along the back; skirt legs; belly weight.':'空心软 PVC 本体包住钩尖朝上贴背的双钩；裙边蛙腿；腹部配重。',
+'Blades flash and thump around a cast head and skirt.':'叶片围绕铸造头和裙边闪光并产生重击震动。',
+'Cast head on a big single hook, R-bend wire arm with one or two blades and a silicone skirt. Sinks; blades lift it with speed.':'大单钩上的铸造头，R 弯钢丝臂带一到两片叶片和硅胶裙。沉水；速度越快叶片越把它往上带。',
+'Planes and churns the surface with a buzz blade.':'用嗡嗡叶片在水面滑行并搅水。',
+'Cast head and wire arm with a {}- or {}-wing buzz blade that churns the surface once the lure planes.':'铸造头和钢丝臂带 {} 翼或 {} 翼嗡嗡叶片，路亚滑行后搅动水面。',
+'Stamped metal: wobbles on the pull, flutters on the drop.':'冲压金属：拉动时摆动，下落时翻飞。',
+'Stamped metal plate with a pressed cup; wobbles on the retrieve and flutters on the drop.':'带压制杯形的冲压金属片；收线时摆动，下落时翻飞。',
+'Draw your own body with spline curves, then add any parts from the palette.':'用样条曲线画出自己的本体，再从部件库中添加任意部件。',
+'Your own body from spline curves (side top / belly, top-view width) plus any components from the palette.':'由样条曲线（侧视背部 / 腹部、俯视宽度）构成的自定义本体，加上部件库中的任意部件。',
+'big bony mouth, explosive surface strikes near cover; hook gap ≥ {} mm ({}/{}–{}/{} strong).':'嘴大骨硬，在障碍物附近水面爆发式攻击；钩距 ≥ {} mm（{}/{}–{}/{} 加强）。',
+'weedy swamps and padi drains; slow, weedless presentations; hook gap ≥ {} mm (#{}–{}/{}).':'多草沼泽和稻田水沟；慢速防挂操作；钩距 ≥ {} mm（#{}–{}/{}）。',
+'fast rivers and rapids; chases fast, flashy lures; hook gap ≥ {} mm (#{}–{}/{}).':'急流和湍滩；追逐快速闪亮的路亚；钩距 ≥ {} mm（#{}–{}/{}）。',
+'reservoirs and ex-mining ponds; very aggressive, hits fast lures; hook gap ≥ {} mm (#{}–{}/{} strong).':'水库和废矿湖；非常凶猛，爱攻击快速路亚；钩距 ≥ {} mm（#{}–{}/{} 加强）。',
+/* misc UI */
+'Params':'参数','(empty = auto)':'（留空 = 自动）','Umpan':'Umpan',
+'The colourway code, Pantone / RAL and layer stack for the factory are in':'给工厂的配色代码、Pantone / RAL 和涂层叠层在',
+'Below Released every drawing, PDF and HTML export is stamped “NOT FOR PRODUCTION – Concept”.':'在“已发布”之前，所有图纸、PDF 和 HTML 导出都会盖上“非生产用 – 概念”字样。',
+'· USD · FOB Port Klang':'· USD · FOB 巴生港','· packaging.csv in the release pack':'· 发布包中的 packaging.csv','· mold {} + bill die {}':'· 模具 {} + 潜水唇模 {}',
+'ABS resin':'ABS 树脂','PC bill sheet':'PC 潜水唇板材','USD/kg':'USD/kg','USD/pc':'USD/件','USD/h':'USD/小时','USD/stroke':'USD/次',
+'Paint L{} (solid)':'涂装 L{}（纯色）','Paint L{} (fade)':'涂装 L{}（渐变）','Paint L{} (stencil)':'涂装 L{}（喷花）','Paint L{} (foil)':'涂装 L{}（箔片）','Paint, level {}':'涂装，等级 {}',
+'Scrap allowance {}%':'报废余量 {}%','Moulding: {} USD/h × {} s ÷ {} cav.':'成型：{} USD/小时 × {} 秒 ÷ {} 穴',
+'BOM mass in lure {} g (model {} g)':'BOM 中路亚质量 {} g（模型 {} g）','QC band {}–{} g':'QC 范围 {}–{} g',
+'Blister {} × {} × {} mm on card {} × {} mm: fits (needs ≥ {} × {} mm incl. {} mm hang header).':'吸塑 {} × {} × {} mm 配卡纸 {} × {} mm：放得下（需 ≥ {} × {} mm，含 {} mm 挂头）。',
+'Tracking deviation over {} m':'{} m 内的偏航','No roll-over / blow-out at {} m/s':'{} m/s 时不翻滚 / 不失控','Hook / ring proof load held {} s':'钩 / 环保持验证负载 {} 秒',
+'Hook / ring / wire proof load held {} s':'钩 / 环 / 钢丝保持验证负载 {} 秒','Floats, no leak after {} min':'{} 分钟后仍漂浮无渗漏',
+'{}:{} · {} cm/turn':'{}:{} · {} cm/圈','body width / height {}':'本体宽 / 高 {}','cup {} cm³ · Ø{} × {} mm':'杯 {} cm³ · Ø{} × {} mm','Snap {} mm':'快速别针 {} mm',
+'at {} m/s · ±{}° wobble':'{} m/s 时 · ±{}° 摆动','at {} m/s · {} props':'{} m/s 时 · {} 个螺旋桨','at {} m/s':'{} m/s 时',
+'at {} m/s · blade spin action':'{} m/s 时 · 叶片旋转','at {} m/s · leg kick + wake action':'{} m/s 时 · 蛙腿踢水 + 尾迹','at {} m/s · pop & spit action':'{} m/s 时 · 吐泡喷水',
+'at {} m/s · prop spin + wake action':'{} m/s 时 · 螺旋桨旋转 + 尾迹','at {} m/s · surface buzz action':'{} m/s 时 · 水面嗡嗡搅水','at {} m/s · tight shimmy action':'{} m/s 时 · 细碎震动',
+'at {} m/s · walk-the-dog action':'{} m/s 时 · Z 字狗走','at {} m/s · wobble + flutter action':'{} m/s 时 · 摆动 + 翻飞',
+'Willow #{} at {} m/s':'柳叶 #{}，{} m/s 时','Colorado #{} at {} m/s':'科罗拉多 #{}，{} m/s 时','Willow blade #{}':'柳叶叶片 #{}','Colorado blade #{}':'科罗拉多叶片 #{}',
+'+ {} mm hook gap suits a big mouth':'+ {} mm 钩距适合大嘴鱼',
+'+ two hooks in play':'+ 两个钩同时作用','− hooks sometimes foul':'− 钩有时会缠','− one big single behind the skirt (short strikes miss it)':'− 裙边后只有一个大单钩（短咬容易落空）',
+'− weedless frog double: needs a hard, late hookset':'− 防挂蛙用双钩：需要晚一点、用力刺鱼',
+'CB above CG · target ≥ {} mm ✓':'浮心高于重心 · 目标 ≥ {} mm ✓','CB above CG · target ≥ {} mm ✗':'浮心高于重心 · 目标 ≥ {} mm ✗',
+/* hooks & hardware lines */
+'Hooks #{} treble':'鱼钩 #{} 三本钩','Hooks #{} treble + #{} treble':'鱼钩 #{} 三本钩 + #{} 三本钩','Hooks {}/{} jig':'鱼钩 {}/{} 铅头钩','Hooks {}/{} upturned double':'鱼钩 {}/{} 上翘双钩',
+'Hooks {}× {}/{} {}X':'鱼钩 {}× {}/{} {}X','Hooks {}× #{} {}X':'鱼钩 {}× #{} {}X',
+'Belly: {}/{} treble {}X strong + ring':'腹部：{}/{} 三本钩 {}X 加强 + 开口环','Tail: {}/{} treble {}X strong + ring':'尾部：{}/{} 三本钩 {}X 加强 + 开口环',
+'Belly: #{} treble {}X strong + ring':'腹部：#{} 三本钩 {}X 加强 + 开口环','Tail: #{} treble {}X strong + ring':'尾部：#{} 三本钩 {}X 加强 + 开口环',
+'Belly hook {}/{} treble swing reach':'腹钩 {}/{} 三本钩摆动范围','Tail hook {}/{} treble swing reach':'尾钩 {}/{} 三本钩摆动范围',
+'Belly hook #{} treble swing reach':'腹钩 #{} 三本钩摆动范围','Tail hook #{} treble swing reach':'尾钩 #{} 三本钩摆动范围','#{} treble swing reach':'#{} 三本钩摆动范围',
+'Ballast {}× {} mm steel':'配重 {}× {} mm 钢','Ballast {}× {} mm lead':'配重 {}× {} mm 铅','Ballast {}× {} mm tungsten':'配重 {}× {} mm 钨','Ballast ball ×{}':'配重钢珠 ×{}',
+'Line-tie split ring':'拉线环开口环','Split ring on the line-tie eye':'拉线环上的开口环','Split ring, hook hangers':'开口环，钩挂点','Split ring, hook hangers ×{}':'开口环，钩挂点 ×{}',
+'Split ring, line tie':'开口环，拉线环','Split ring, line tie (through the blank)':'开口环，拉线环（穿过坯料）','Through-wire Ø{} SS{} ({} mm)':'贯穿钢丝 Ø{} SS{}（{} mm）',
+'{}D eyes ×{}':'{}D 眼睛 ×{}','{}D epoxy eye (pair = {} pcs) ×{}':'{}D 环氧眼睛（一对 = {} 件）×{}','{}D epoxy eye (pair = {} pcs)':'{}D 环氧眼睛（一对 = {} 件）',
+'Ball-bearing swivel + split ring':'滚珠转环 + 开口环','Blade shaft (nose)':'叶片轴（鼻部）','Brass bead / cup washer for the prop':'螺旋桨用黄铜珠 / 杯形垫圈',
+'Buzz blade, {} wings':'嗡嗡叶片，{} 翼','Clacker blade (hits the rivet)':'响板叶片（敲击铆钉）','Clevis + {} beads':'U 形夹 + {} 颗珠','Rivet + bearing bead':'铆钉 + 轴承珠',
+'Propeller, front, {} blades':'螺旋桨，前，{} 叶','Propeller, rear, {} blades':'螺旋桨，后，{} 叶','R-bend wire form (buzz arm)':'R 弯钢丝成型（嗡嗡臂）',
+'R-bend wire form (lower + upper arm)':'R 弯钢丝成型（下臂 + 上臂）','Rattle balls (loose in a chamber) ×{}':'响珠（仓内松动）×{}','Silicone legs, {} × {} strands':'硅胶蛙腿，{} × {} 丝',
+'Silicone skirt, {} strands + collar band':'硅胶裙，{} 丝 + 束环','Tail feather / bucktail on the tail hook':'尾钩上的尾羽 / 鹿毛',
+/* DFM notes */
+'Bill slot {} × {} × {} mm (billT +{}, tab +{}, +{} deep); thinnest pocket wall {} mm (< {} mm).':'潜水唇槽 {} × {} × {} mm（唇厚 +{}，插片 +{}，加深 +{}）；最薄槽壁 {} mm（< {} mm）。',
+'Bill tab outside the body skin: {} % of tab volume (tab {} mm wide, sized to {} % of the local body width).':'潜水唇插片露出本体表皮：占插片体积 {} %（插片宽 {} mm，为局部本体宽度的 {} %）。',
+'Cavity x {}–{} mm; solid nose plug {} mm, tail plug {} mm (local radius < wall + {} mm or hardware bosses).':'空腔 x {}–{} mm；实心鼻塞 {} mm，尾塞 {} mm（局部半径 < 壁厚 + {} mm 或有五金凸台）。',
+'Minimum wall {} mm at x {} (nominal {}; DFM limit {} mm).':'最小壁厚 {} mm，位于 x {}（标称 {}；DFM 极限 {} mm）。',
+'Slot walls are modelled at {}° draft. Toolmaker: ≤ {}° on the slot core; the +{}/+{} fit is measured at the parting face.':'槽壁按 {}° 拔模建模。模具厂：槽芯 ≤ {}°；+{}/+{} 配合在分型面测量。',
+'{} alignment pins Ø{} × {} on L, Ø{} × {} holes on R at ({}, {}), ({}, {}).':'{} 个定位销：左侧 Ø{} × {}，右侧孔 Ø{} × {}，位置（{}, {}）、（{}, {}）。',
+'TODO (toolmaker): harness channel Ø{} and ballast pocket Ø{} × {} long at x {}, z {} are specified on the drawing but not modelled in the halves.':'待办（模具厂）：钢丝通道 Ø{} 和配重槽 Ø{} × {} 长（x {}，z {}）已在图纸上标注，但半模中未建模。',
+'TODO (toolmaker): harness channel Ø{} and ballast rattle chamber Ø{} × {} long at x {}, z {} are specified on the drawing but not modelled in the halves.':'待办（模具厂）：钢丝通道 Ø{} 和配重响珠仓 Ø{} × {} 长（x {}，z {}）已在图纸上标注，但半模中未建模。',
+'Surface under {}° draft reaches {} mm from the parting plane (nose). Soften the nose/tail or accept a slide.':'拔模角小于 {}° 的表面距分型面 {} mm（鼻部）。请把鼻部 / 尾部做圆滑，或接受滑块。',
+'Chisel nose face is parallel to the ±Y pull ({}° draft): add ≥ {}° draft each side of the parting line on the face, or polish the nose plug; the face is cut into the nose plug by the toolmaker.':'斜切鼻部端面与 ±Y 脱模方向平行（{}° 拔模）：请在端面分型线两侧各加 ≥ {}° 拔模，或抛光鼻塞；端面由模具厂在鼻塞上加工。',
+'Flat nose face is parallel to the ±Y pull ({}° draft): add ≥ {}° draft each side of the parting line on the face, or polish the nose plug; the face is cut into the nose plug by the toolmaker.':'平面鼻部端面与 ±Y 脱模方向平行（{}° 拔模）：请在端面分型线两侧各加 ≥ {}° 拔模，或抛光鼻塞；端面由模具厂在鼻塞上加工。',
+'Cup face Ø{} × {} mm opens along X, square to the ±Y pull: an undercut for a {}-plate mold. Use a side-action slide core (tooling +{} USD) or CNC / drill it after moulding; nose_cup_cutter.stl is the cutter solid (the halves carry the flat face).':'杯形端面 Ø{} × {} mm 沿 X 方向开口，与 ±Y 脱模方向垂直：对 {} 板模具是倒扣。请用侧抽滑块（模具 +{} USD），或成型后 CNC / 钻孔；nose_cup_cutter.stl 为刀具实体（半模上为平面端面）。',
+'Cup depth {} mm on {} mm width ({} %).':'杯深 {} mm，宽 {} mm（{} %）。',
+'Arm opening {}° at the R-bend (lower {} / upper {} mm).':'R 弯处钢丝臂开口 {}°（下臂 {} / 上臂 {} mm）。',
+'Wire anchor A ({}, {}) is cast in with {} mm metal cover.':'钢丝锚点 A（{}, {}）铸入，金属覆盖 {} mm。',
+'Metal over the hook shank: min {} mm at x {} (hook wire Ø{}; ≥ {} mm casts without cold shuts).':'钩柄上的金属：最少 {} mm，位于 x {}（钩条 Ø{}；≥ {} mm 铸造时不会冷隔）。',
+'Head mold: two halves split at Y = {} (the head is symmetric, no undercut); half-round channels for the hook shank (aft) and the wire (up the lower arm), tapered sprue at the belly, Ø{} pins.':'头部模具：两个半模在 Y = {} 处分开（头部对称，无倒扣）；钩柄（后方）和钢丝（沿下臂）的半圆通道，腹部锥形浇口，Ø{} 定位销。',
+'Mold blocks (head_mold_L / _R.stl) are generated as closed solids with the export; the toolmaker adds vents and the gate cup.':'模块（head_mold_L / _R.stl）随导出生成为封闭实体；模具厂另加排气孔和浇口杯。',
+'Rotocast mold: {} parts split at Y = {}, no undercuts (the body is symmetric); fill / vent through the tail leg hole Ø{}.':'旋转成型模具：{} 件，在 Y = {} 处分开，无倒扣（本体对称）；通过尾部腿孔 Ø{} 注料 / 排气。',
+'PVC wall {} mm ({}–{} rotocasts evenly and collapses on the bite).':'PVC 壁厚 {} mm（{}–{} 旋转成型均匀，咬口时会被压扁）。',
+'Hook shank {} mm vs hollow length {} mm.':'钩柄 {} mm，空腔长度 {} mm。',
+'Developed blank {} × {} mm, area {} mm², strip {} mm wide, blank mass {} g.':'展开坯料 {} × {} mm，面积 {} mm²，条料宽 {} mm，坯料质量 {} g。',
+'Sheet t {} mm for a {} mm blank (t / L {} %).':'{1} mm 坯料用板厚 {0} mm（t / L {2} %）。',
+'Hook hole Ø{} at x {}: edge distance {} mm (≥ {} t = {} mm).':'钩孔 Ø{}，位于 x {}：边距 {} mm（≥ {} t = {} mm）。',
+'Tie hole Ø{} at x {}: edge distance {} mm (≥ {} t = {} mm).':'拉线孔 Ø{}，位于 x {}：边距 {} mm（≥ {} t = {} mm）。',
+'Weight {} g = {} oz: within ±{} % of the {}/{} oz class (+{} %).':'重量 {} g = {} oz：在 {3}/{4} oz 级别的 ±{2} % 以内（+{5} %）。',
+'Weight {} g = {} oz: within ±{} % of the {}/{} oz class ({} %).':'重量 {} g = {} oz：在 {3}/{4} oz 级别的 ±{2} % 以内（{5} %）。',
+/* release-tab leftovers */
+'Belly weight, ring, eyes':'腹部配重、开口环、眼睛','Blade spins freely, clacker hits the rivet':'叶片自由旋转，响板敲击铆钉',
+'Brass t {} mm · {} cm³':'黄铜 t {} mm · {} cm³','Lead head {} g · {} cm³':'铅头 {} g · {} cm³','PVC plastisol, wall {} mm · {} cm³':'PVC 增塑糊，壁厚 {} mm · {} cm³',
+'Carton side {} mm > {} mm; reduce the carton qty.':'外箱边长 {} mm > {} mm；请减少每箱数量。',
+'Cast head + wire form':'铸造头 + 钢丝成型','Hard body, {}-half injection':'硬体，{} 半模注塑','Soft PVC rotocast':'软 PVC 旋转成型','Stamped + cup-pressed blank':'冲压 + 杯形压制坯料',
+'Hook, split rings, guard':'钩、开口环、防草挡','No line twist after {} retrieves':'{} 次收线后无扭线','PVC cement':'PVC 胶','PVC plastisol':'PVC 增塑糊',
+'Rattle audible':'响珠声可闻','Rest angle on the surface (+ = tail down)':'水面静止角度（+ = 尾部朝下）','Tracking / no roll-over':'直线游动 / 不翻滚','Tracking over {} m':'{} m 内直线游动',
+'Vibration at {} m/s':'{} m/s 时的震动','Wobble at {} m/s':'{} m/s 时的摆动','Walk-the-dog glide each side':'Z 字狗走每侧滑动','Willow #{} + Colorado #{}':'柳叶 #{} + 科罗拉多 #{}',
+'Wire form, blades, swivel / clevis, beads':'钢丝成型、叶片、转环 / U 形夹、珠子','{} DFM error':'{} 个 DFM 错误','{} DFM errors':'{} 个 DFM 错误','{}-wing buzz Ø{}':'{} 翼嗡嗡叶片 Ø{}',
+'Ø{} · cut {} mm · R-bend {}°':'Ø{} · 下料 {} mm · R 弯 {}°',
+/* fish gallery */
+'Aggressiveness':'攻击性','Malay name':'马来名','Typical size':'常见体型','Length–weight':'体长–体重','Zone':'水层','Mouth':'嘴型','Preferred speed':'偏好速度',
+'Hook guidance':'用钩建议','hook gap ≥':'钩距 ≥','Current target species':'当前目标鱼种','Set as target species':'设为目标鱼种',
+'Predator: strikes lures':'掠食鱼：会攻击路亚','Not a lure predator: strikes are rare':'非路亚掠食鱼：很少攻击','Baitfish (schools only)':'饵鱼（只成群出现）',
+'Fresh water':'淡水','Brackish / estuary':'半咸水 / 河口','Sea':'海水',
+'surface / just under it':'水面 / 水面下方','mid-water':'中层','near the bottom & cover':'近底层与障碍物旁',
+'terminal (at the snout tip); gape ≈ {} mm at {} kg':'端位（在吻端）；{1} kg 时张口约 {0} mm','superior (lower jaw longer, strikes upward); gape ≈ {} mm at {} kg':'上位（下颌较长，向上攻击）；{1} kg 时张口约 {0} mm',
+'inferior / sub-terminal (under the snout); gape ≈ {} mm at {} kg':'下位 / 亚端位（在吻下方）；{1} kg 时张口约 {0} mm',
+'Giant snakehead':'巨型蛇头鱼','Striped snakehead':'斑鳢（生鱼）','Hampala barb':'哈朗鲃','Peacock bass':'孔雀鲈','Barramundi / Asian sea bass':'尖吻鲈 / 亚洲鲈',
+'Giant trevally':'浪人鲹','Orange-spotted grouper':'点带石斑鱼','Malaysian mahseer':'马来西亚结鱼','Yellow / river catfish':'黄鲶 / 河鲶','Iridescent shark catfish':'苏氏芒鲶（巴丁鱼）',
+'Hoven\'s carp':'苏丹鱼','Javaen / silver barb':'爪哇鲃 / 银鲃','Nile tilapia':'尼罗罗非鱼','Juvenile barb':'幼鲃','Rasbora':'波鱼',
+'big bony mouth, explosive surface strikes near cover.':'嘴大骨硬，在障碍物附近水面爆发式攻击。',
+'weedy swamps and padi drains; slow, weedless presentations.':'多草沼泽和稻田水沟；慢速防挂操作。',
+'fast rivers and rapids; chases fast, flashy lures.':'急流和湍滩；追逐快速闪亮的路亚。',
+'reservoirs and ex-mining ponds; very aggressive, hits fast lures.':'水库和废矿湖；非常凶猛，爱攻击快速路亚。',
+'clear, fast jungle rivers; powerful runs, mostly catch-and-release.':'清澈湍急的雨林河流；冲刺有力，多为钓后放流。',
+'estuaries and mangroves; head-shakes and jumps, tide edges.':'河口和红树林；甩头跳跃，常在潮水边缘。',
+'estuary rock, mangrove snags and reefs; ambushes from cover and dives back in.':'河口礁石、红树林障碍和礁区；从掩体伏击后钻回去。',
+'reefs, river mouths and open sea; smashes fast poppers and stickbaits on the surface.':'礁区、河口和外海；在水面猛攻快速波扒和铅笔。',
+'rivers and reservoirs; feeds near the bottom at dusk and night, takes slow lures.':'河流和水库；黄昏和夜间在近底层觅食，会吃慢速路亚。',
+'schools in the upper water column; the main forage of toman, sebarau and peacock bass.':'在上层水体成群活动；是托曼、西巴劳和孔雀鲈的主要饵料。',
+'tight, flashing schools along the banks; forage for every river predator.':'沿岸密集闪光的鱼群；是所有河流掠食鱼的饵料。',
+'big rivers and ponds; eats fruit, pellets and bait, rarely a lure. In the strike game it follows lures now and then but hits crankbaits only rarely (×{} interest).':'大河与池塘；吃果实、饲料和饵，很少吃路亚。在咬口游戏中偶尔跟随路亚，但很少攻击胖子（兴趣 ×{}）。',
+'ponds, ex-mining lakes and estuaries; plankton and plants, lure strikes are rare (nest guarding). In the strike game it follows lures now and then but hits crankbaits only rarely (×{} interest).':'池塘、废矿湖和河口；吃浮游生物和植物，很少攻击路亚（护巢时除外）。在咬口游戏中偶尔跟随路亚，但很少攻击胖子（兴趣 ×{}）。',
+'rivers and ponds; eats fruit, seeds and plants, crankbait strikes are rare. In the strike game it follows lures now and then but hits crankbaits only rarely (×{} interest).':'河流和池塘；吃果实、种子和植物，很少攻击胖子。在咬口游戏中偶尔跟随路亚，但很少攻击胖子（兴趣 ×{}）。',
+'rivers, ponds and padi canals; mostly plants, now and then a small spinner or spoon. In the strike game it follows lures now and then but hits crankbaits only rarely (×{} interest).':'河流、池塘和稻田水渠；主要吃植物，偶尔咬小型旋转亮片或勺型亮片。在咬口游戏中偶尔跟随路亚，但很少攻击胖子（兴趣 ×{}）。',
+'· #{}–#{} (bait)':'· #{}–#{}（饵钓）','· #{}–{}/{} (bait)':'· #{}–{}/{}（饵钓）','· #{}–{}/{} strong':'· #{}–{}/{} 加强','· {}/{}–{}/{} strong':'· {}/{}–{}/{} 加强',
+'· #{}–{}/{} strong, in-line singles':'· #{}–{}/{} 加强，直排单钩','· {}/{}–{}/{} in-line singles, extra strong':'· {}/{}–{}/{} 直排单钩，超强'
+};
+
+/* ---------- pattern rules for strings with names in them ---------- */
+const T=s=>{const v=tr(s);return v==null?s:v;};
+const fam=s=>FAM[s]||T(s), sp=s=>SPECIES[s]||s;
+const spList=s=>s.split(', ').map(x=>SPECIES[x]||x).join('、');
+const hookWords=s=>s.replace('upturned double','上翘双钩').replace('jig hook','铅头钩').replace('treble','三本钩');
+const preset=s=>s.replace(/[A-Za-z][A-Za-z' -]*[A-Za-z]/g,w=>PRESET[w]||w);
+const RULES=[
+ [/^(.+?): (.+?)\. Typical: (.+)$/,(m,f,d,l)=>fam(f)+'：'+T(d+'.')+' 典型目标：'+spList(l)],
+ [/^(.+?): family estimate \(EST\) — (.+)$/,(m,f,d)=>fam(f)+'：类别估算（EST）— '+({'sink rate and running depth':'下沉速度与泳层','rest attitude and surface action':'静止姿态与水面动作'}[d]||d)],
+ [/^New (.+?) from preset: (.+)$/,(m,f,p)=>'从预设新建'+fam(f)+'：'+preset(p)],
+ [/^New design from preset: (.+)$/,(m,p)=>'从预设新建设计：'+preset(p)],
+ [/^(.+) added$/,(m,p)=>T(p)+' 已添加'],
+ [/^Target species: (.+)$/,(m,s)=>'目标鱼种：'+sp(s)],
+ [/^Hook-up odds per (.+) strike$/,(m,s)=>'每次'+sp(s)+'咬口的中鱼率'],
+ [/^EST figures are rule-of-thumb estimates for an? (.+) \(FAMILIES\.\w+\); rest attitude and buoyancy are computed from the body mesh and every part\. Confirm in a tank\.$/i,
+   (m,f)=>'EST 数值是针对'+fam(Object.keys(FAM).find(k=>k.toLowerCase()===f.toLowerCase())||f)+'的经验估算；静止姿态与浮力根据本体网格和所有部件计算。请在水箱中确认。'],
+ [/^the whole retrieve \((.+)\)\. It spends$/,(m,f)=>'整个收线过程（'+fam(Object.keys(FAM).find(k=>k.toLowerCase()===f)||f)+'）。它有'],
+ [/^grid ([\d.]+) mm · (.+?) · rest (.+)$/,(m,g,f,r)=>'网格 '+g+' mm · '+fam(f)+' · 静止 '+T(r)],
+ [/^(.+?) · (Floating|Sinking|Suspending) · dives to ([\d.]+) m$/,(m,n,c,d)=>preset(n)+' · '+T(c)+' · 潜深 '+d+' m'],
+ [/^(.+?) · (\d+) mm ([\d.]+) g · (Floating|Sinking|Suspending|Terapung|Tenggelam|Melayang) · (dives to|selam hingga) ([\d.]+) m$/,(m,n,l,g,c,x,d)=>preset(n)+' · '+l+' mm '+g+' g · '+T(c)+' · 潜深 '+d+' m'],
+ [/^(.+?) · (.+)$/,(m,a,b)=>{ const x=tr(a), y=tr(b); return (x==null&&y==null)?null:(x==null?a:x)+' · '+(y==null?b:y); }],
+ [/^((?:Toman|Haruan|Sebarau|Siakap|Peacock bass)(?:, (?:Toman|Haruan|Sebarau|Siakap|Peacock bass))*)\.?$/,(m,l)=>spList(l)],
+ [/^(Toman|Haruan|Sebarau|Peacock bass):$/,(m,s)=>sp(s)+'：'],
+ [/^(.+) · rarely strikes$/,(m,s)=>sp(s)+' · 很少攻击'],
+ [/^(Toman Deep Crank|Lipless vibe|Chugger|Walker|Twin-prop|Katak jump frog|Hollow soft frog|Tandem spinnerbait|Clacker buzzbait|Casting spoon|Custom blank|Medium Crank|Minnow|Square-bill)\b(.*)$/,(m,a,b)=>preset(a+b).replace('timber','木桩区')],
+ [/^Saved in this browser · (\d+) changes? logged in rev (\w+)$/,(m,n,r)=>'已保存在此浏览器 · 已在版本 '+r+' 记录 '+n+' 项变更'],
+ [/^(\d+) changes? logged in rev (\w+)$/,(m,n,r)=>'已在版本 '+r+' 记录 '+n+' 项变更'],
+ [/^Saved (.+)$/,(m,f)=>'已保存 '+f],[/^Deleted (.+)$/,(m,f)=>'已删除 '+f],
+ [/^Release pack failed: (.+)$/,(m,e)=>'发布包生成失败：'+e],
+ [/^That file is not an Umpan Lab design \((.+)\)$/,(m,e)=>'该文件不是 Umpan Lab 设计（'+e+'）'],
+ [/^(.+) reset to (.+)$/,(m,l,v)=>T(l)+' 已重置为 '+v],
+ [/^Status: (\w+)$/,(m,s)=>'状态：'+T(s)],
+ [/^Rev (\w) · (\w+)$/,(m,r,s)=>'版本 '+r+' · '+T(s)],
+ [/^(\w+) refused: (\d+) items? missing \(see Release gate\)$/,(m,s,n)=>T(s)+' 被拒绝：缺少 '+n+' 项（见发布关卡）'],
+ [/^Converted to an editable custom body \((\d+) points per curve\) with (\d+) components$/,(m,a,b)=>'已转换为可编辑的自定义本体（每条曲线 '+a+' 个点），含 '+b+' 个部件'],
+ [/^Fish gallery: (.+)$/,(m,s)=>'鱼类图库：'+s],
+ [/^(.+) ·$/,(m,a)=>{ const x=tr(a); return x==null?null:x+' ·'; }],
+ [/^(.+) gap \((.+) ≥ ([\d.]+)\)$/,(m,h,s,n)=>hookWords(h)+' 钩距（'+sp(s)+' ≥ '+n+'）'],
+ [/^Model (\w+) · SKU (\S+) \(class from current figures\)$/,(m,a,b)=>'型号 '+a+' · SKU '+b+'（等级按当前数据）'],
+ [/^(.+) \((.+)\)$/,(m,a,b)=>{ const x=tr(a); return x==null?null:x+'（'+T(b)+'）'; }],
+ [/^(.+)[.:]$/,(m,a)=>{ const x=tr(a); return x==null?null:x+(m.endsWith(':')?'：':'。'); }],
+];
+
+const CACHE=new Map();
+function tr(s){
+  if(!s) return null;
+  if(CACHE.has(s)) return CACHE.get(s);
+  CACHE.set(s,null); // guards recursion
+  let out=null;
+  if(Object.prototype.hasOwnProperty.call(ZH,s)) out=ZH[s];
+  else if(FAM[s]) out=FAM[s];
+  else if(SPECIES[s]) out=SPECIES[s];
+  else if(COLOURWAY[s]) out=COLOURWAY[s];
+  else {
+    const nums=s.match(NUM);
+    if(nums){ const k=s.replace(NUM,'{}'); if(Object.prototype.hasOwnProperty.call(ZH,k)){ let i=0; out=ZH[k].replace(/\{(\d*)\}/g,(m,d)=>{ const v=d!==''?nums[+d]:nums[i++]; return v===undefined?m:v; }); } }
+    if(out==null) for(const [re,fn] of RULES){ const m=s.match(re); if(m){ const r=fn(...m); if(r!=null){ out=r; break; } } }
+  }
+  if(CACHE.size>20000) CACHE.clear();
+  CACHE.set(s,out); return out;
+}
+
+/* ---------- DOM layer ---------- */
+let LANG=(()=>{ try{ return localStorage.getItem(LS_KEY)==='zh'?'zh':'en'; }catch(e){ return 'en'; } })();
+const ORIG=new WeakMap(), SET=new WeakMap(), AORIG=new WeakMap();
+const skip=el=>!el||!!el.closest(SKIP_SEL);
+function convert(en){ if(LANG!=='zh') return en; const m=en.match(/^(\s*)([\s\S]*?)(\s*)$/); if(!m[2]||!/[A-Za-z]/.test(m[2])) return en; const t=tr(m[2]); return t==null?en:m[1]+t+m[3]; }
+function doText(n){
+  const cur=n.nodeValue; if(SET.get(n)===cur) return;
+  if(skip(n.parentElement)) return;
+  ORIG.set(n,cur); const out=convert(cur); SET.set(n,out); if(out!==cur) n.nodeValue=out;
+}
+function doAttr(el,a){
+  if(skip(el)) return; const cur=el.getAttribute(a); if(cur==null) return;
+  let rec=AORIG.get(el); if(!rec){ rec={}; AORIG.set(el,rec); }
+  if(rec[a]&&rec[a].set===cur) return;
+  const out=convert(cur); rec[a]={en:cur,set:out}; if(out!==cur) el.setAttribute(a,out);
+}
+function walk(root){
+  if(root.nodeType===3){ doText(root); return; }
+  if(root.nodeType!==1||skip(root)) return;
+  ATTRS.forEach(a=>{ if(root.hasAttribute(a)) doAttr(root,a); });
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT,{acceptNode:n=>n.nodeType===1&&n.matches(SKIP_SEL)?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+  let n; while(n=w.nextNode()){ if(n.nodeType===3) doText(n); else ATTRS.forEach(a=>{ if(n.hasAttribute(a)) doAttr(n,a); }); }
+}
+/* re-translate everything from the stored English */
+function reapply(){
+  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);
+  let n; while(n=w.nextNode()){
+    if(n.nodeType===3){ if(skip(n.parentElement)) continue; const en=ORIG.has(n)&&SET.get(n)===n.nodeValue?ORIG.get(n):n.nodeValue; ORIG.set(n,en); const out=convert(en); SET.set(n,out); if(out!==n.nodeValue) n.nodeValue=out; }
+    else { if(skip(n)) continue; const rec=AORIG.get(n)||{}; AORIG.set(n,rec); ATTRS.forEach(a=>{ const cur=n.getAttribute(a); if(cur==null) return; const en=rec[a]&&rec[a].set===cur?rec[a].en:cur; const out=convert(en); rec[a]={en,set:out}; if(out!==cur) n.setAttribute(a,out); }); }
+  }
+  document.documentElement.lang=LANG==='zh'?'zh-CN':'en';
+  document.title=LANG==='zh'?'Umpan Lab — 路亚设计器':'Umpan Lab — Lure Designer';
+  const b=document.getElementById('langBtn');
+  if(b){ b.textContent=LANG==='zh'?'EN':'中文'; b.setAttribute('aria-label',LANG==='zh'?'Switch to English':'切换到中文'); b.title=LANG==='zh'?'Switch to English':'切换到中文'; AORIG.delete(b); }
+}
+/* English text of a node even while it is shown in Chinese (used by app code that compares labels) */
+window.i18nSrc=n=>{ if(!n) return ''; if(n.nodeType===3) return SET.get(n)===n.nodeValue&&ORIG.has(n)?ORIG.get(n):n.nodeValue;
+  let s=''; const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT); let t; while(t=w.nextNode()) s+=window.i18nSrc(t); return s; };
+window.i18nLang=()=>LANG;
+
+const btn=document.createElement('button');
+btn.className='ghost'; btn.id='langBtn'; btn.type='button'; btn.dataset.noi18n='';
+btn.addEventListener('click',()=>{ LANG=LANG==='zh'?'en':'zh'; try{ localStorage.setItem(LS_KEY,LANG); }catch(e){} reapply(); });
+const acts=document.querySelector('header .actions'); if(acts) acts.insertBefore(btn,acts.firstChild);
+
+new MutationObserver(recs=>{ for(const r of recs){
+  if(r.type==='characterData') doText(r.target);
+  else if(r.type==='attributes') doAttr(r.target,r.attributeName);
+  else r.addedNodes.forEach(walk);
+} }).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:ATTRS});
+reapply();
+})();
 </script>
 </body>
 </html>
