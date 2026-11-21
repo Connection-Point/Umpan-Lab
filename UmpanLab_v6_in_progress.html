@@ -167,7 +167,11 @@ body[data-mode=release] .center{grid-template-rows:minmax(0,1fr)}
 .pane h4,h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--teal);margin:0 0 4px;display:flex;align-items:center;gap:6px}
 h3{margin:14px 0 6px}
 h3:first-child{margin-top:4px}
-#side{flex:1;width:100%;min-height:0}
+#side{flex:1;width:100%;min-height:0;cursor:zoom-in}
+#side.zoomed{cursor:grab;touch-action:none}#side.panning{cursor:grabbing}
+.szbar{margin-left:auto;display:flex;align-items:center;gap:3px;text-transform:none;letter-spacing:0}
+.szbar button{min-width:24px;height:22px;padding:0 6px;font-size:12px;line-height:1;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink);cursor:pointer}
+.szbar button:disabled{opacity:.4;cursor:default}.szl{font-family:var(--mono);font-size:11px;color:var(--mute);min-width:36px;text-align:right}
 .simgrid{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:14px;flex:1;min-height:0}
 #dive{width:100%;height:100%;min-height:0}
 .simres{font-size:12px;color:#2b3532;line-height:1.5;overflow:auto}
@@ -508,7 +512,7 @@ body.fam-custom[data-mode=design] #pSide{display:none}
     </div>
     <div class="splitter" id="splitter" data-show="design analyse simulate" role="separator" aria-orientation="horizontal" aria-label="Resize the bottom panel" aria-controls="panel" tabindex="0" aria-valuemin="160" aria-valuemax="600" aria-valuenow="250"></div>
     <div class="panel" id="panel">
-      <div class="pane" id="pSide" data-show="design analyse"><h4>Side profile &amp; hook swing <span class="tagi calc">CALC</span></h4><svg id="side" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Side profile with hook swing circles"></svg></div>
+      <div class="pane" id="pSide" data-show="design analyse"><h4>Side profile &amp; hook swing <span class="tagi calc">CALC</span><span class="szbar" role="group" aria-label="Zoom"><span class="szl" id="szLvl" aria-live="polite">100%</span><button type="button" id="szOut" title="Zoom out" aria-label="Zoom out" disabled>−</button><button type="button" id="szIn" title="Zoom in" aria-label="Zoom in">+</button><button type="button" id="szFit" title="Fit the whole profile (double-click the view)">Fit</button></span></h4><svg id="side" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Side profile with hook swing circles"></svg></div>
       <div class="pane" id="pEdit" data-show="design" role="region" aria-label="Profile editor"></div>
       <div class="pane" id="pSim" data-show="simulate">
         <h4>Dive curve <span class="tagi est">EST</span></h4>
@@ -5306,10 +5310,50 @@ function sideProfile(p){ const d=profileData(p), r0=radii(0,p), face=famOf(p)!==
   const sT=(r0[0]+r0[1])*sl, xt=d.xs.map(x=>sT+(p.L-sT)*x/p.L), xb=d.xs.slice(); let cup=null;
   if(face&&p.noseFace==='cup'&&p.cupDepth>0.05){ const D=Math.min(p.cupDepth,0.45*p.L), lip=0.86; cup=[]; for(let k=0;k<=12;k++){ const u=-1+2*k/12, z=u>=0?u*r0[0]*lip:u*r0[1]*lip, s=Math.abs(u); cup.push([(z+r0[1])*sl+D*(1-s*s),z]); } }
   return {xs:d.xs,xt,xb,tops:d.tops,bots:d.bots,ws:d.ws,cup}; }
+/* side-view zoom / pan: a viewBox window inside the full extent; strokes and labels are sized from the visible width so they stay readable */
+const SIDE_Z={k:1,cx:0,cy:0,base:null}, SIDE_KMAX=8;
+function sideView(xmin,xmax,zmin,zmax){
+  const b={x:xmin,y:-zmax,w:xmax-xmin,h:zmax-zmin}; SIDE_Z.base=b;
+  if(SIDE_Z.k<=1){ SIDE_Z.k=1; return b; }
+  const w=b.w/SIDE_Z.k, h=b.h/SIDE_Z.k;
+  SIDE_Z.cx=clamp(SIDE_Z.cx,b.x+w/2,b.x+b.w-w/2); SIDE_Z.cy=clamp(SIDE_Z.cy,b.y+h/2,b.y+b.h-h/2);
+  return {x:SIDE_Z.cx-w/2,y:SIDE_Z.cy-h/2,w,h};
+}
+function sideRedraw(){
+  const svg=document.getElementById('side'); svg.classList.toggle('zoomed',SIDE_Z.k>1);
+  const l=document.getElementById('szLvl'); if(l) l.textContent=Math.round(SIDE_Z.k*100)+'%';
+  const o=document.getElementById('szOut'), i=document.getElementById('szIn'); if(o) o.disabled=SIDE_Z.k<=1; if(i) i.disabled=SIDE_Z.k>=SIDE_KMAX;
+  if(typeof cache!=='undefined'&&cache) drawSide(cache.p,cache.bill,cache.A);
+}
+/* zoom to k, keeping the SVG point (px,py) where it is on screen (default: the view centre) */
+function sideZoomTo(k,px,py){
+  const b=SIDE_Z.base; if(!b) return; k=clamp(k,1,SIDE_KMAX);
+  const w0=b.w/SIDE_Z.k, h0=b.h/SIDE_Z.k, vx=SIDE_Z.k>1?SIDE_Z.cx-w0/2:b.x, vy=SIDE_Z.k>1?SIDE_Z.cy-h0/2:b.y;
+  if(px==null){ px=vx+w0/2; py=vy+h0/2; }
+  const w1=b.w/k, h1=b.h/k, f=w1/w0;
+  SIDE_Z.cx=px-(px-vx)*f+w1/2; SIDE_Z.cy=py-(py-vy)*f+h1/2; SIDE_Z.k=k; sideRedraw();
+}
+(function sideZoomUI(){
+  const svg=document.getElementById('side'); if(!svg) return;
+  const toSvg=(cx,cy)=>{ const m=svg.getScreenCTM(); if(!m) return [null,null]; const pt=svg.createSVGPoint(); pt.x=cx; pt.y=cy; const q=pt.matrixTransform(m.inverse()); return [q.x,q.y]; };
+  svg.addEventListener('wheel',e=>{ if(!SIDE_Z.base) return; e.preventDefault(); const [x,y]=toSvg(e.clientX,e.clientY); sideZoomTo(SIDE_Z.k*Math.exp(-e.deltaY*(e.deltaMode===1?0.05:0.0015)),x,y); },{passive:false});
+  svg.addEventListener('dblclick',e=>{ e.preventDefault(); SIDE_Z.k=1; sideRedraw(); });
+  const ptrs=new Map(); let drag=null, pinch=null;
+  svg.addEventListener('pointerdown',e=>{ ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+    if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),k:SIDE_Z.k,mid:toSvg((a[0]+b[0])/2,(a[1]+b[1])/2)}; drag=null; }
+    else if(SIDE_Z.k>1&&e.button===0){ drag={x:e.clientX,y:e.clientY,cx:SIDE_Z.cx,cy:SIDE_Z.cy}; svg.classList.add('panning'); try{ svg.setPointerCapture(e.pointerId); }catch(_){} } });
+  svg.addEventListener('pointermove',e=>{ if(!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+    if(pinch&&ptrs.size===2){ const [a,b]=[...ptrs.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1]); if(pinch.d>0) sideZoomTo(pinch.k*d/pinch.d,pinch.mid[0],pinch.mid[1]); return; }
+    if(drag){ const m=svg.getScreenCTM(); if(!m) return; SIDE_Z.cx=drag.cx-(e.clientX-drag.x)/m.a; SIDE_Z.cy=drag.cy-(e.clientY-drag.y)/m.d; sideRedraw(); } });
+  const end=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; if(drag&&!ptrs.size){ drag=null; svg.classList.remove('panning'); } };
+  svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
+  const on=(id,fn)=>{ const b=document.getElementById(id); if(b) b.addEventListener('click',fn); };
+  on('szIn',()=>sideZoomTo(SIDE_Z.k*1.5)); on('szOut',()=>sideZoomTo(SIDE_Z.k/1.5)); on('szFit',()=>{ SIDE_Z.k=1; sideRedraw(); });
+})();
 function drawSideGen(p,bill,A){
   const svg=document.getElementById('side'), pd=sideProfile(p), b=lureBounds(p,A), H=A.hooks;
-  const xmin=b.x0-6, xmax=b.x1+8, zmax=b.z1+6, zmin=b.z0-6, sw=(xmax-xmin)/500;
-  svg.setAttribute('viewBox',`${xmin} ${-zmax} ${xmax-xmin} ${zmax-zmin}`);
+  const xmin=b.x0-6, xmax=b.x1+8, zmax=b.z1+6, zmin=b.z0-6, V=sideView(xmin,xmax,zmin,zmax), sw=V.w/500;
+  svg.setAttribute('viewBox',`${V.x} ${V.y} ${V.w} ${V.h}`);
   const outline=pd.xt.map((x,i)=>`${x},${-pd.tops[i]}`).concat(pd.xb.slice().reverse().map((x,i)=>`${x},${pd.bots[pd.xb.length-1-i]}`)).join(' ');
   let h=''; const step=(xmax-xmin)>160?20:10;
   for(let x=Math.ceil(xmin/step)*step;x<=xmax;x+=step) h+=`<line x1="${x}" y1="${-zmax}" x2="${x}" y2="${-zmin}" stroke="#e6dfd1" stroke-width="${sw}"/>`;
@@ -5328,13 +5372,13 @@ function drawSideGen(p,bill,A){
   if(!bill.none){ const bc=billSideCorners(p,bill.B,bill.outline.tip); h+=`<polygon points="${bc.map(v=>`${v.x},${-v.z}`).join(' ')}" fill="#cfe6f5" stroke="#1c2826" stroke-width="${sw*1.4}"/>`; }
   if(pd.cup) h+=`<path d="M${pd.cup.map(v=>`${v[0]},${-v[1]}`).join(' L')}" fill="#f6f1e6" stroke="#1c2826" stroke-width="${sw*1.2}" stroke-dasharray="${sw*4} ${sw*3}"/>`;
   h+=inside.map(drawItem).join('')+front.map(drawItem).join('');
-  const sr=svg.getBoundingClientRect(), pxu=sr.width>0&&sr.height>0?Math.min(sr.width/(xmax-xmin),sr.height/(zmax-zmin)):0;
-  const fs=Math.max((xmax-xmin)/58,pxu?11/pxu:0), r=(xmax-xmin)/170;
+  const sr=svg.getBoundingClientRect(), pxu=sr.width>0&&sr.height>0?Math.min(sr.width/V.w,sr.height/V.h):0;
+  const fs=Math.max(V.w/58,pxu?11/pxu:0), r=V.w/170;
   const mark=(q,c,lab,rr)=>`<circle cx="${q[0]}" cy="${-q[2]}" r="${rr}" fill="${c}"/><text x="${q[0]+rr*1.6}" y="${-q[2]+fs*0.35}" font-size="${fs}" font-family="'IBM Plex Mono',ui-monospace,monospace" fill="${c}">${lab}</text>`;
   h+=mark(A.pts.tie,'#222','tie',r*0.8);
   h+=`<line x1="${A.CG[0]}" y1="${-A.CG[2]}" x2="${A.CB[0]}" y2="${-A.CB[2]}" stroke="#888" stroke-dasharray="${r} ${r}" stroke-width="${sw}"/>`;
   h+=mark(A.CB,'#2a62c9','CB',r*1.2)+mark(A.CG,'#c62f2f','CG',r*1.2);
-  h+=`<text x="${xmin+2}" y="${-zmin-2}" font-size="${Math.max(fs*0.9,pxu?10.5/pxu:0)}" fill="#6b736f" font-family="'IBM Plex Mono',ui-monospace,monospace">grid ${step} mm · ${esc(FAM(p).n)} · rest ${esc(A.est.restTxt)}</text>`;
+  h+=`<text x="${V.x+V.w/150}" y="${V.y+V.h-V.h/90}" font-size="${Math.max(fs*0.9,pxu?10.5/pxu:0)}" fill="#6b736f" font-family="'IBM Plex Mono',ui-monospace,monospace">grid ${step} mm · ${esc(FAM(p).n)} · rest ${esc(A.est.restTxt)}</text>`;
   svg.innerHTML=h;
 }
 function drawSide(p,bill,A){
@@ -5344,8 +5388,8 @@ function drawSide(p,bill,A){
   const drop=Math.max(H.belly?H.belly.ringD+H.belly.l*1.2-A.pts.belly[2]:0, H.tail?H.tail.ringD+H.tail.l*1.2:0);
   const xmin=Math.min(0,...bc.map(v=>v.x))-8, xmax=p.L+(H.tail?H.tail.gap:0)+16;
   const zmax=p.top+8, zmin=Math.min(-p.bot,...bc.map(v=>v.z),-drop)-6;
-  svg.setAttribute('viewBox',`${xmin} ${-zmax} ${xmax-xmin} ${zmax-zmin}`);
-  const sw=(xmax-xmin)/500;
+  const V=sideView(xmin,xmax,zmin,zmax); svg.setAttribute('viewBox',`${V.x} ${V.y} ${V.w} ${V.h}`);
+  const sw=V.w/500;
   const outline=pd.xs.map((x,i)=>`${x},${-pd.tops[i]}`).concat(pd.xs.slice().reverse().map((x,i)=>`${x},${pd.bots[pd.xs.length-1-i]}`)).join(' ');
   let h='';
   for(let x=Math.ceil(xmin/10)*10;x<=xmax;x+=10) h+=`<line x1="${x}" y1="${-zmax}" x2="${x}" y2="${-zmin}" stroke="#e6dfd1" stroke-width="${sw}"/>`;
@@ -5360,14 +5404,14 @@ function drawSide(p,bill,A){
   if(p.ballN) h+=`<circle cx="${p.ballX}" cy="${-p.ballZ}" r="${p.ballD/2}" fill="#9aa3a8" stroke="#555" stroke-width="${sw}"/>`;
   if(H.belly) h+=hookSVG(A.pts.belly,H.belly,p.hookType,'#3b3f46',sw);
   if(H.tail) h+=hookSVG(A.pts.tail,H.tail,p.hookType,'#3b3f46',sw);
-  const sr=svg.getBoundingClientRect(), pxu=sr.width>0&&sr.height>0?Math.min(sr.width/(xmax-xmin),sr.height/(zmax-zmin)):0;
-  const fs=Math.max((xmax-xmin)/58,pxu?11/pxu:0);   // labels never below 11 px on screen
+  const sr=svg.getBoundingClientRect(), pxu=sr.width>0&&sr.height>0?Math.min(sr.width/V.w,sr.height/V.h):0;
+  const fs=Math.max(V.w/58,pxu?11/pxu:0);   // labels never below 11 px on screen
   const mark=(q,c,lab,r)=>`<circle cx="${q[0]}" cy="${-q[2]}" r="${r}" fill="${c}"/><text x="${q[0]+r*1.6}" y="${-q[2]+fs*0.35}" font-size="${fs}" font-family="'IBM Plex Mono',ui-monospace,monospace" fill="${c}">${lab}</text>`;
-  const r=(xmax-xmin)/170;
+  const r=V.w/170;
   h+=mark(A.pts.tie,'#222','tie',r*0.8)+mark(A.pts.belly,'#222','',r*0.8)+mark(A.pts.tail,'#222','',r*0.8);
   h+=`<line x1="${A.CG[0]}" y1="${-A.CG[2]}" x2="${A.CB[0]}" y2="${-A.CB[2]}" stroke="#888" stroke-dasharray="${r} ${r}" stroke-width="${sw}"/>`;
   h+=mark(A.CB,'#2a62c9','CB',r*1.2)+mark(A.CG,'#c62f2f','CG',r*1.2);
- h+=`<text x="${xmin+2}" y="${-zmin-2}" font-size="${Math.max(fs*0.9,pxu?10.5/pxu:0)}" fill="#6b736f" font-family="'IBM Plex Mono',ui-monospace,monospace">grid 10 mm · dashed = hook swing reach</text>`;
+ h+=`<text x="${V.x+V.w/150}" y="${V.y+V.h-V.h/90}" font-size="${Math.max(fs*0.9,pxu?10.5/pxu:0)}" fill="#6b736f" font-family="'IBM Plex Mono',ui-monospace,monospace">grid 10 mm · dashed = hook swing reach</text>`;
   svg.innerHTML=h;
 }
 
@@ -6533,7 +6577,7 @@ const ZH={
 'Hooks {}× {}':'鱼钩 {}× {}','{} USD':'{} USD','{} rpm':'{} rpm','{} cm':'{} cm','{} mm':'{} mm',
 'Undo ({})':'撤销（{}）','Remove Ballast {}':'移除配重 {}','Remove Hook hanger {}':'移除钩挂点 {}','Remove Line tie (screw eye) {}':'移除拉线环（螺丝眼）{}',
 'Blank ellipsoid {} × {} × {} mm':'空白椭球体 {} × {} × {} mm','Status: Concept':'状态：概念','Status: Checked':'状态：已校核','Status: Approved':'状态：已批准','Status: Golden':'状态：金样',
-'Language':'语言',
+'Language':'语言','Zoom':'缩放','Zoom in':'放大','Zoom out':'缩小','Fit the whole profile (double-click the view)':'显示完整轮廓（双击视图）',
 /* family descriptions */
 'Diving lip: swims down on the retrieve, floats up on a pause.':'潜水唇：收线时下潜，停顿时上浮。',
 'Lofted floating body with a diving bill; dives on the retrieve and floats up on a pause.':'带潜水唇的浮水本体；收线时下潜，停顿时上浮。',
