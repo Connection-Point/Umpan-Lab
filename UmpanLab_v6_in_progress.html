@@ -684,7 +684,7 @@ const MATH_K=['prodMode','bodyMat','wall','wallMm','infill','coat','draftDeg','f
 const RATTLE_K=['rattleN','rattleD','rattleMat','rattleX','rattleZ'], PROP_K=['propF','propR','propDia','propBlades','propPitch','propMat'];
 const FAMILIES={
  crank:{n:'Crankbait',desc:'Lofted floating body with a diving bill; dives on the retrieve and floats up on a pause.',species:['toman','sebarau','peacock','siakap'],
-   body:'loft',keys:[...SHAPE_K,...BILL_K,...HW_K,...BAL_K,...MATH_K],mats:HARD_MATS,hookTypes:['treble','single'],retrieve:['steady','stopgo','burnkill','rip','pump'],
+   body:'loft',keys:[...SHAPE_K,'noseBend','tailBend',...BILL_K,...HW_K,...BAL_K,...MATH_K],mats:HARD_MATS,hookTypes:['treble','single'],retrieve:['steady','stopgo','burnkill','rip','pump'],
    preset:'toman90',zone:'diver',code:'TDC',swim:'wobble',process:'inject2',bom:'crank',ranges:{L:[40,160],fat:[0.2,0.6]}},
  pencil:{n:'Topwater pencil (walk-the-dog)',desc:'Slim floating stickbait with a tail weight: rests tail-down and walks side to side on rod twitches.',species:['toman','peacock','siakap','sebarau'],
    body:'loft',keys:[...SHAPE_K,'noseFace','faceD','faceAng',...TIE_K,...HW_K,'featherL',...BAL_K,...MATH_K],mats:HARD_MATS,hookTypes:['treble','single'],retrieve:['walk','poppause','steady'],
@@ -795,7 +795,7 @@ const COMP_TYPES={
  feather:{n:'Tail feather',max:1,f:[['len','Length','mm',5,80,1,25]]}
 };
 /* defaults of every v6 parameter (merged under each preset; v5 files get them too = crank, round nose, nothing added) */
-const PARAM_DEFAULTS={family:'crank',species:'toman',noseFace:'round',faceD:14,cupDepth:4,faceAng:0,seN:2.2,seM:2.4,seT:2.2,tieX:1,tieZ:-1,
+const PARAM_DEFAULTS={family:'crank',species:'toman',noseBend:0,tailBend:0,noseFace:'round',faceD:14,cupDepth:4,faceAng:0,seN:2.2,seM:2.4,seT:2.2,tieX:1,tieZ:-1,
   propF:'on',propR:'on',propDia:16,propBlades:3,propPitch:30,propMat:'steel',blade1:'colorado',size1:'4',blade2:'none',size2:'3',bladeFin:'nickel',bladePos:'rear',
   headShape:'bullet',jigHook:'3/0',armLen:62,armAng:10,wireD:'0.9',trailer:'off',buzzDia:40,buzzWings:'3',clacker:'on',
   skirtL:45,skirtN:48,legLen:30,legN:10,featherL:0,softWall:1.0,plateT:1.2,spoonCup:3,guard:'off',rattleN:0,rattleD:4,rattleMat:'steel',rattleX:30,rattleZ:0,
@@ -829,7 +829,9 @@ const GROUPS = [
   {k:'fat',l:'Fattest point',min:0.2,max:0.75,step:0.01,u:'× length'},
   {k:'taper',l:'Tail taper',min:0.4,max:1.6,step:0.01,u:'higher = slimmer'},
   {k:'se',l:'Flank squareness',min:1.8,max:3.5,step:0.05,u:'2 = round'},
-  {k:'tailR',l:'Tail thickness',min:1,max:8,step:0.1,u:'mm'}]},
+  {k:'tailR',l:'Tail thickness',min:1,max:8,step:0.1,u:'mm'},
+  {k:'noseBend',l:'Nose bend',min:-20,max:20,step:0.5,u:'° (+ = nose down)'},
+  {k:'tailBend',l:'Tail bend',min:-20,max:20,step:0.5,u:'° (+ = tail down)'}]},
  {name:'Bill (lip)', open:true, items:[
   {k:'billLen',l:'Exposed length',min:10,max:85,step:1,u:'mm'},
   {k:'billW',l:'Width',min:8,max:40,step:0.5,u:'mm'},
@@ -1138,6 +1140,14 @@ function radii(t,p){
   const tc=noseCut(p); if(tc>0) t=tc+(1-tc)*t;
   return radiiRaw(t,p.top,p.bot,p.halfW,p.fat,p.taper,p.tailR);
 }
+/* v6: body bend. The centre line drops (+°) or rises (−°) toward the nose and toward the tail, either side of the fattest point;
+   the chord from the fattest point to each end sits at that angle. radii() stays relative to the centre line, so every body z
+   adds bendZ(x). Crankbait family only (other families return 0). */
+function bendZ(x,p){ if(!p||famOf(p)!=='crank') return 0; const a=+p.noseBend||0, b=+p.tailBend||0; if(!a&&!b) return 0;
+  const L=p.L, xf=clamp(p.fat,0.05,0.95)*L;
+  if(x<xf){ const d=xf-x; return -Math.tan(a*Math.PI/180)*d*d/xf; }
+  const d=x-xf; return -Math.tan(b*Math.PI/180)*d*d/(L-xf); }
+function rootZe(p){ return p.rootZ+bendZ(p.rootX,p); }
 /* superellipse exponent along the body (custom: nose / middle / tail values; cast heads: from the head shape) */
 function seAt(t,p){
   const f=p.family;
@@ -1256,16 +1266,16 @@ function buildBody(p,res){
   const r0=fam==='crank'?[0,0,0]:radii(0,p), face=r0[0]+r0[1]>0.05&&r0[2]>0.02;
   if(!face){
     for(let i=1;i<NS-1;i++){
-      const t=ts[i], [top,bot,w]=radii(t,p), x=t*p.L, se=seAt(t,p);
+      const t=ts[i], [top,bot,w]=radii(t,p), x=t*p.L, se=seAt(t,p), bz=bendZ(x,p);
       for(let j=0;j<NA;j++){
         const a=2*Math.PI*j/NA, c=Math.cos(a), s=Math.sin(a);
         const y=w*sgnpow(c,2/se), z=(s>=0?top:bot)*sgnpow(s,2/se);
-        pos.push(x,y,z); col.push(...paintAt(x, z>=0? z/(top||1) : z/(bot||1), p.L));
+        pos.push(x,y,z+bz); col.push(...paintAt(x, z>=0? z/(top||1) : z/(bot||1), p.L));
       }
     }
     const R=NS-2, nose=R*NA, tail=nose+1;
-    pos.push(0,0,0); col.push(...paintAt(0,0,p.L));
-    pos.push(p.L,0,0); col.push(...paintAt(p.L,0,p.L));
+    pos.push(0,0,bendZ(0,p)); col.push(...paintAt(0,0,p.L));
+    pos.push(p.L,0,bendZ(p.L,p)); col.push(...paintAt(p.L,0,p.L));
     for(let i=0;i<R-1;i++) for(let j=0;j<NA;j++){
       const a0=i*NA+j, a1=i*NA+(j+1)%NA, b0=a0+NA, b1=a1+NA;
       idx.push(a0,b0,a1, a1,b0,b1);
@@ -1331,19 +1341,19 @@ function billBasis(p){
   const th=p.billAng*Math.PI/180;
   const d=new THREE.Vector3(-Math.cos(th),0,-Math.sin(th));
   const n=new THREE.Vector3(-Math.sin(th),0,Math.cos(th));
-  const root=new THREE.Vector3(p.rootX,0,p.rootZ);
+  const root=new THREE.Vector3(p.rootX,0,rootZe(p));
   const M=new THREE.Matrix4().makeBasis(d,new THREE.Vector3(0,1,0),n).setPosition(root);
   return {d,n,root,M,th};
 }
 /* half-width |y| of a superellipse section (radii top/bot/w) at height z; 0 outside */
 function seHalfWidth(top,bot,w,se,z){ const r=z>=0?top:bot; if(!(r>0)||!(w>0)) return 0; const q=Math.abs(z)/r; if(q>=1) return 0; return w*Math.pow(1-Math.pow(q,se),1/se); }
-function bodyHalfWidthAt(p,x,z){ if(!(x>0)||!(x<p.L)) return 0; const [a,b,w]=radii(x/p.L,p); return seHalfWidth(a,b,w,seAt(x/p.L,p),z); }
+function bodyHalfWidthAt(p,x,z){ if(!(x>0)||!(x<p.L)) return 0; const [a,b,w]=radii(x/p.L,p); return seHalfWidth(a,b,w,seAt(x/p.L,p),z-bendZ(x,p)); }
 /* B1: the tab is sized from the body section along its length (u in [-TAB,-1.5]; the last 1.5 mm is the slot mouth) */
 function tabHalfWidth(p){
   const th=p.billAng*Math.PI/180, dx=-Math.cos(th), dz=-Math.sin(th), nx=-Math.sin(th), nz=Math.cos(th), T=p.billT/2;
   let m=Infinity;
   for(let k=0;k<=24;k++){ const u=-TAB+(TAB-1.5)*k/24;
-    for(const s of [-1,0,1]) m=Math.min(m,bodyHalfWidthAt(p,p.rootX+dx*u+nx*s*T,p.rootZ+dz*u+nz*s*T)); }
+    for(const s of [-1,0,1]) m=Math.min(m,bodyHalfWidthAt(p,p.rootX+dx*u+nx*s*T,rootZe(p)+dz*u+nz*s*T)); }
   return clamp(Math.min(7,0.8*m,p.billW/2-0.5),1,7);
 }
 function dedupeCollinear(pts){ // B11: drop exactly-collinear interior points of a closed outline
@@ -1423,8 +1433,8 @@ function ptPolyDist(px,pz,P){ let m=Infinity, inside=true; for(let i=0;i<P.lengt
 function billSlot(p,tabHW){
   const th=p.billAng*Math.PI/180, dx=-Math.cos(th), dz=-Math.sin(th), nx=-Math.sin(th), nz=Math.cos(th);
   const h=(p.billT+PROD.slotFitT)/2, u0=-TAB-PROD.slotEndClr;
-  let uExit=0; for(let u=0;u<=60;u+=0.25){ uExit=u; if(bodyHalfWidthAt(p,p.rootX+dx*u,p.rootZ+dz*u)<=0) break; }
-  const u1=uExit+3, P=(u,w)=>[p.rootX+dx*u+nx*w,p.rootZ+dz*u+nz*w];
+  let uExit=0; for(let u=0;u<=60;u+=0.25){ uExit=u; if(bodyHalfWidthAt(p,p.rootX+dx*u,rootZe(p)+dz*u)<=0) break; }
+  const u1=uExit+3, P=(u,w)=>[p.rootX+dx*u+nx*w,rootZe(p)+dz*u+nz*w];
   let rect=[P(u0,-h),P(u1,-h),P(u1,h),P(u0,h)]; if(polyArea2(rect)<0) rect.reverse();
   const rearPts=[P(u0,-h),P(u0,h)];
   return {rect,d:tabHW+PROD.slotSideClr,h,u0,u1,uExit,rearX:Math.max(rearPts[0][0],rearPts[1][0]),rearPts,width:2*h,depth:tabHW+PROD.slotSideClr,len:TAB+PROD.slotEndClr};
@@ -1444,11 +1454,11 @@ function cavityRange(p,wall,flange,xFront,xBack){
 function innerLoftProps(p,cav){
   if(!cav) return {V:0,C:[p.L/2,0,0],A:0};
   const ts=stationTs(), pos=[], idx=[], NA=NAB;
-  for(let r=cav.r0;r<=cav.r1;r++){ const q=cav.inner(r), x=ts[r+1]*p.L;
-    const se=seAt(x/p.L,p); for(let j=0;j<NA;j++){ const a=2*Math.PI*j/NA, c=Math.cos(a), s=Math.sin(a); pos.push(x,q[2]*sgnpow(c,2/se),(s>=0?q[0]:q[1])*sgnpow(s,2/se)); } }
+  for(let r=cav.r0;r<=cav.r1;r++){ const q=cav.inner(r), x=ts[r+1]*p.L, bz=bendZ(x,p);
+    const se=seAt(x/p.L,p); for(let j=0;j<NA;j++){ const a=2*Math.PI*j/NA, c=Math.cos(a), s=Math.sin(a); pos.push(x,q[2]*sgnpow(c,2/se),(s>=0?q[0]:q[1])*sgnpow(s,2/se)+bz); } }
   const nR=cav.r1-cav.r0+1;
   for(let i=0;i<nR-1;i++) for(let j=0;j<NA;j++){ const a0=i*NA+j,a1=i*NA+(j+1)%NA,b0=a0+NA,b1=a1+NA; idx.push(a0,b0,a1,a1,b0,b1); }
-  const c0=pos.length/3; pos.push(cav.x0,0,0); const c1=c0+1; pos.push(cav.x1,0,0);
+  const c0=pos.length/3; pos.push(cav.x0,0,bendZ(cav.x0,p)); const c1=c0+1; pos.push(cav.x1,0,bendZ(cav.x1,p));
   for(let j=0;j<NA;j++){ idx.push(c0,j,(j+1)%NA); const o=(nR-1)*NA; idx.push(c1,o+(j+1)%NA,o+j); }
   const t=trisFromIndexed(pos,idx); const m=massProps(t); if(m.V<0){ flipTris(t); return massProps(t); } return m;
 }
@@ -1483,8 +1493,8 @@ function buildHalfCanonical(p,cfg){
   let nid=0; const mk=(x,z,Y,tags,pe)=>({id:nid++,x,z,Y,tags,pe:pe||null});
   const info={slotOK:!!cfg.slot,slotMsg:''};
   const G=[]; for(let r=0;r<R;r++){ const t=ts[r+1], rad=radii(t,p), x=t*p.L, row=[];
-    const se=seAt(t,p); for(let c=0;c<=32;c++){ const [y,z]=halfRingYZ(rad,se,c); row.push(mk(x,z,-y,(c===0||c===32)?BND:0)); } G.push(row); }
-  const nose=mk(0,0,0,BND), tail=mk(p.L,0,0,BND);
+    const se=seAt(t,p), bz=bendZ(x,p); for(let c=0;c<=32;c++){ const [y,z]=halfRingYZ(rad,se,c); row.push(mk(x,z+bz,-y,(c===0||c===32)?BND:0)); } G.push(row); }
+  const nose=mk(0,bendZ(0,p),0,BND), tail=mk(p.L,bendZ(p.L,p),0,BND);
   [nose,tail].concat(...G).forEach(v=>v.grid=true);
   // parent grid edge of a segment (both ends on the same original grid edge) or null
   const segEdge=(a,b)=>{ if(a.grid&&b.grid) return {a:a.id<b.id?a:b,b:a.id<b.id?b:a,key:Math.min(a.id,b.id)+'_'+Math.max(a.id,b.id)};
@@ -1595,7 +1605,7 @@ function buildHalfCanonical(p,cfg){
   // ---- cavity (inner loft) with solid nose / tail plugs
   const cav=cfg.cav; let holeCav=null;
   if(cav){
-    const IV=r=>{ const q=cav.inner(r), x=ts[r+1]*p.L; return Array.from({length:33},(_,c)=>{const [y,z]=halfRingYZ(q,seAt(ts[r+1],p),c); return M.v('i'+r+'_'+c,x,y,z);}); };
+    const IV=r=>{ const q=cav.inner(r), x=ts[r+1]*p.L, bz=bendZ(x,p); return Array.from({length:33},(_,c)=>{const [y,z]=halfRingYZ(q,seAt(ts[r+1],p),c); return M.v('i'+r+'_'+c,x,y,z+bz);}); };
     const rows=[]; for(let r=cav.r0;r<=cav.r1;r++) rows.push(IV(r));
     for(let i=0;i<rows.length-1;i++) for(let c=0;c<32;c++){ const A=rows[i][c],B=rows[i][c+1],C=rows[i+1][c],D=rows[i+1][c+1]; M.tri(A,B,C,[0,1,0],'cavity'); M.tri(B,D,C,[0,1,0],'cavity'); }
     const f=rows[0], l=rows[rows.length-1];
@@ -1647,7 +1657,7 @@ function pinSiteSearch(p,slot,cav,which){
     return true; };
   const x0=which==='nose'?0.5:cav.x1, x1=which==='nose'?cav.x0:p.L, score=(x,z)=>bodyHalfWidthAt(p,x,z)-0.05*Math.abs(z);
   const cand=[];   // coarse 1 mm grid ranked by section thickness, then the first feasible one refined on 0.25 mm
-  for(let x=x0;x<=x1;x+=1){ const [a,b]=radii(clamp(x/p.L,0,1),p); for(let z=-b;z<=a;z+=1){ const sc=score(x,z); if(sc>=need) cand.push({x,z,sc}); } }
+  for(let x=x0;x<=x1;x+=1){ const [a,b]=radii(clamp(x/p.L,0,1),p), bz=bendZ(x,p); for(let z=-b+bz;z<=a+bz;z+=1){ const sc=score(x,z); if(sc>=need) cand.push({x,z,sc}); } }
   cand.sort((u,w)=>w.sc-u.sc);
   for(const c of cand){ if(!ok(c.x,c.z)) continue; let best=c;
     for(let dx=-0.75;dx<=0.75;dx+=0.25) for(let dz=-0.75;dz<=0.75;dz+=0.25){ const x=c.x+dx, z=c.z+dz, sc=score(x,z); if(sc>best.sc&&ok(x,z)) best={x,z,sc}; }
@@ -1655,7 +1665,7 @@ function pinSiteSearch(p,slot,cav,which){
   return null;
 }
 /* full production model for the current parameters. full=false -> canonical (no pins) only, enough for mass */
-const PROD_GEOM_KEYS=['L','top','bot','halfW','fat','taper','se','tailR','billLen','billW','billAng','billT','rootX','rootZ','tailX','wallMm','flangeMm','draftDeg','pins'];
+const PROD_GEOM_KEYS=['L','top','bot','halfW','fat','taper','se','tailR','noseBend','tailBend','billLen','billW','billAng','billT','rootX','rootZ','tailX','wallMm','flangeMm','draftDeg','pins'];
 const PROD_GEOM_KEYS6=['family','noseFace','faceD','cupDepth','faceAng','headShape','seN','seM','seT','plateT','spoonCup'];
 const _pgCache=new Map();
 function productionGeometry(p,full){
@@ -1665,7 +1675,7 @@ function productionGeometry(p,full){
 }
 function productionGeometryRaw(p,full){
   const wall=p.wallMm, flange=p.flangeMm, o=billOutline(p);
-  let slot=hasBill(p)?billSlot(p,o.tabHW):null; if(slot&&slot.uExit<=0&&bodyHalfWidthAt(p,p.rootX,p.rootZ)<=0&&!(bodyHalfWidthAt(p,(slot.rearPts[0][0]+slot.rearPts[1][0])/2,(slot.rearPts[0][1]+slot.rearPts[1][1])/2)>0)) slot=null;
+  let slot=hasBill(p)?billSlot(p,o.tabHW):null; if(slot&&slot.uExit<=0&&bodyHalfWidthAt(p,p.rootX,rootZe(p))<=0&&!(bodyHalfWidthAt(p,(slot.rearPts[0][0]+slot.rearPts[1][0])/2,(slot.rearPts[0][1]+slot.rearPts[1][1])/2)>0)) slot=null;
   let xFront=Math.max(slot?slot.rearX+wall+0.6:0,noseRecess(p)>0?noseRecess(p)+wall:0), xBack=p.L-Math.max(p.tailX,0.5)-4;
   let cav=cavityRange(p,wall,flange,xFront,xBack), pins=[];
   if(cav&&p.pins==='on'){
@@ -1747,12 +1757,12 @@ function analyse(p, body, bill, prod, ovr){
       const mS=mat.rho*Vs/1000, mI=mat.rho*p.infill/100*prod.Vin/1000; mBody=mS+mI; cBody=[0,1,2].map(i=>(mS*cS[i]+mI*prod.Cin[i])/Math.max(mBody,1e-9)); } }
   const mCoat=1.1*bm.A*p.coat/1000;
   const mBill=bmat.rho*lm.V/1000;                       // B3: the tab is real material inside the body
-  const bellyZ=-radii(clamp(p.bellyX/p.L,0,1),p)[1];
-  const tailHX=p.L-Math.max(p.tailX,0.5), tailHZ=0;
+  const bellyZ=-radii(clamp(p.bellyX/p.L,0,1),p)[1]+bendZ(p.bellyX,p);
+  const tailHX=p.L-Math.max(p.tailX,0.5), tailHZ=bendZ(tailHX,p);
   const B=bill.B, tie=B.root.clone().addScaledVector(B.d,p.tieU);
   const hB=hookInfo(p,p.hookB), hT=hookInfo(p,p.hookT);
   const hangCG=(h,x,z)=>h?[x,0,z-h.ringD-0.55*h.l]:[x,0,z];
-  const te=0.12, [etop,,ew]=radii(te,p), ez=etop*0.28, eyeR=Math.max(1.4,etop*0.17);
+  const te=0.12, [etop,,ew]=radii(te,p), ez=etop*0.28+bendZ(te*p.L,p), eyeR=Math.max(1.4,etop*0.17);
   const pts={
     tie:[tie.x,0,tie.z], belly:[p.bellyX,0,bellyZ], tail:[tailHX,0,tailHZ],
     bellyHook:hangCG(hB,p.bellyX,bellyZ), tailHook:hangCG(hT,tailHX,tailHZ), ball:[p.ballX,0,p.ballZ], eye:[te*p.L,0,ez], root:[B.root.x,0,B.root.z]
@@ -1795,8 +1805,8 @@ function analyse(p, body, bill, prod, ovr){
   const r=p.ballD/2, ballX=i=>p.ballX+(i-(p.ballN-1)/2)*p.ballD*1.02;
   let ballInside=true;
   for(let i=0;i<p.ballN;i++){ const x=ballX(i); if(x-r<0.6||x+r>p.L-0.6){ballInside=false;break}
-    for(const xx of [x-r*0.7,x,x+r*0.7]){ const [bt,bb,bw]=radii(clamp(xx/p.L,0,1),p), rr=xx===x?r:r*0.71;
-      if(p.ballZ+rr>bt-0.6||p.ballZ-rr<-bb+0.6||seHalfWidth(bt,bb,bw,seAt(clamp(xx/p.L,0,1),p),p.ballZ)<rr+0.6){ballInside=false;break} } if(!ballInside) break; }
+    for(const xx of [x-r*0.7,x,x+r*0.7]){ const [bt,bb,bw]=radii(clamp(xx/p.L,0,1),p), rr=xx===x?r:r*0.71, zz=p.ballZ-bendZ(xx,p);
+      if(zz+rr>bt-0.6||zz-rr<-bb+0.6||seHalfWidth(bt,bb,bw,seAt(clamp(xx/p.L,0,1),p),zz)<rr+0.6){ballInside=false;break} } if(!ballInside) break; }
   // hook point clearances (side view)
   const dist=(a,b)=>Math.hypot(a[0]-b[0],a[2]-b[2]);
   const hooks={belly:hB,tail:hT, tangle:null, lineFoul:null, small:null};
@@ -1825,9 +1835,9 @@ function buoyClass(net){ return net>0.3?'F':net<-0.3?'S':'SP'; }
    parameters into that list; the custom family stores it in p.comps. Positions are mm in the lure frame (x aft, z up). */
 /* height of the back at x incl. the sheared nose face (lipless line tie sits on it) */
 function backAt(p,x){ const r0=radii(0,p), sl=(p.noseFace==='cup'||p.noseFace==='chisel')?faceSlant(p):0, sT=(r0[0]+r0[1])*sl; if(x<=sT) return -r0[1]+(r0[0]+r0[1])*clamp(x/Math.max(sT,1e-6),0,1);
-  const t=clamp((x-sT)/Math.max(p.L-sT,1e-6),0,1); return radii(t,p)[0]; }
-function bellyZ(p,x){ return -radii(clamp(x/p.L,0,1),p)[1]; }
-function backZ(p,x){ return radii(clamp(x/p.L,0,1),p)[0]; }
+  const t=clamp((x-sT)/Math.max(p.L-sT,1e-6),0,1); return radii(t,p)[0]+bendZ(x,p); }
+function bellyZ(p,x){ return -radii(clamp(x/p.L,0,1),p)[1]+bendZ(x,p); }
+function backZ(p,x){ return radii(clamp(x/p.L,0,1),p)[0]+bendZ(x,p); }
 function famComponents(p){
   const f=famOf(p), L=p.L, C=[];
   if(f==='custom') return (p.comps||[]).map(c=>Object.assign({},c));
@@ -1946,7 +1956,7 @@ function compHardware(p,comps,ctx,ovr){
 function eyePlace(p){ const f=famOf(p); return f==='jumpfrog'||f==='softfrog'?[0.2,0.62]:f==='spinnerbait'||f==='buzzbait'?[0.32,0.35]:[0.12,0.28]; }
 /* is a sphere (x,z,r) inside the body with a 0.6 mm skin? */
 function sphereInside(p,x,z,r){ if(x-r<0.6||x+r>p.L-0.6) return false;
-  for(const xx of [x-r*0.7,x,x+r*0.7]){ const [bt,bb,bw]=radii(clamp(xx/p.L,0,1),p), rr=xx===x?r:r*0.71; if(z+rr>bt-0.6||z-rr<-bb+0.6||seHalfWidth(bt,bb,bw,seAt(clamp(xx/p.L,0,1),p),z)<rr+0.6) return false; } return true; }
+  for(const xx of [x-r*0.7,x,x+r*0.7]){ const [bt,bb,bw]=radii(clamp(xx/p.L,0,1),p), rr=xx===x?r:r*0.71, zz=z-bendZ(xx,p); if(zz+rr>bt-0.6||zz-rr<-bb+0.6||seHalfWidth(bt,bb,bw,seAt(clamp(xx/p.L,0,1),p),zz)<rr+0.6) return false; } return true; }
 
 /* generic mass / balance / buoyancy for every non-crank family (same result shape as analyse) */
 function analyseGen(p,body,bill,prod,ovr){
@@ -2516,8 +2526,8 @@ function dfmChecks(rel){
     const th=p.billAng*Math.PI/180, dx=-Math.cos(th), dz=-Math.sin(th), nx=-Math.sin(th), nz=Math.cos(th);
     let pw=Infinity, mouth=0, tot=0, outV=0, totV=0;
     for(let i=0;i<=40;i++){ const u=s.u0+(0-s.u0)*i/40;
-      for(const w of [-s.h,0,s.h]){ const Y=bodyHalfWidthAt(p,p.rootX+dx*u+nx*w,p.rootZ+dz*u+nz*w); tot++; if(Y<s.d) mouth++; else if(u<-1.5) pw=Math.min(pw,Y-s.d); }
-      for(let v=-g.tabHW;v<=g.tabHW+1e-9;v+=g.tabHW/4) for(const w of [-T,0,T]){ if(u<-TAB) continue; totV++; if(Math.abs(v)>bodyHalfWidthAt(p,p.rootX+dx*u+nx*w,p.rootZ+dz*u+nz*w)) outV++; } }
+      for(const w of [-s.h,0,s.h]){ const Y=bodyHalfWidthAt(p,p.rootX+dx*u+nx*w,rootZe(p)+dz*u+nz*w); tot++; if(Y<s.d) mouth++; else if(u<-1.5) pw=Math.min(pw,Y-s.d); }
+      for(let v=-g.tabHW;v<=g.tabHW+1e-9;v+=g.tabHW/4) for(const w of [-T,0,T]){ if(u<-TAB) continue; totV++; if(Math.abs(v)>bodyHalfWidthAt(p,p.rootX+dx*u+nx*w,rootZe(p)+dz*u+nz*w)) outV++; } }
     out.push([pw<1.0?'w':'o',`Bill slot ${fx(s.width,2)} × ${fx(2*s.d,2)} × ${fx(s.len,1)} mm (billT +0.15, tab +0.2, +0.3 deep); thinnest pocket wall ${isFinite(pw)?fx(pw,2):'—'} mm${pw<1.0?' (< 1.0 mm)':''}.`]);
     const pct=100*outV/Math.max(totV,1);
     out.push([pct>15?'e':pct>3?'w':'o',`Bill tab outside the body skin: ${fx(pct,1)} % of tab volume (tab ${fx(2*g.tabHW,1)} mm wide, sized to 80 % of the local body width).`]);
@@ -2547,7 +2557,7 @@ function dfmChecks(rel){
 
 function profileData(p){
   const N=140, xs=[],tops=[],bots=[],ws=[];
-  for(let i=0;i<N;i++){const t=(1-Math.cos(Math.PI*i/(N-1)))/2; const [a,b,w]=radii(t,p); xs.push(t*p.L); tops.push(a); bots.push(b); ws.push(w)}
+  for(let i=0;i<N;i++){const t=(1-Math.cos(Math.PI*i/(N-1)))/2; const [a,b,w]=radii(t,p), bz=bendZ(t*p.L,p); xs.push(t*p.L); tops.push(a+bz); bots.push(b-bz); ws.push(w)}
   return {xs,tops,bots,ws};
 }
 function billSideCorners(p,B,tip){ // B5: tip = real exposed length from billOutline
@@ -2741,7 +2751,7 @@ function drawingModel(rel,hash){
   S.cline(X(xmin)-3,Z(0),X(p.L)+4,Z(0),{avoid:'soft'});
   const cupD=noseRecess(p), cupR=cupD>0?Math.min(radii(0,p)[2],(radii(0,p)[0]+radii(0,p)[1])/2)*0.86:0;   // v6B: popper cup (hidden line)
   if(cupD>0){ const r0=radii(0,p), sl=faceSlant(p), P=[]; for(let k=0;k<=24;k++){ const u=-1+2*k/24, z=cupR*u; P.push([X((z+r0[1])*sl+Math.min(cupD,0.45*p.L)*(1-u*u)),Z(z)]); } S.poly(P,{closed:false,w:0.25,dash:[1.6,0.8],avoid:'soft'}); }
-  if(g.cav){ const cx=[], ct=[], cb=[]; for(let i=0;i<=40;i++){ const x=g.cav.x0+(g.cav.x1-g.cav.x0)*i/40, q=radii(x/p.L,p); cx.push(x); ct.push(q[0]-g.wall-g.flange); cb.push(q[1]-g.wall-g.flange); }
+  if(g.cav){ const cx=[], ct=[], cb=[]; for(let i=0;i<=40;i++){ const x=g.cav.x0+(g.cav.x1-g.cav.x0)*i/40, q=radii(x/p.L,p), bz=bendZ(x,p); cx.push(x); ct.push(q[0]-g.wall-g.flange+bz); cb.push(q[1]-g.wall-g.flange-bz); }
     S.poly(cx.map((x,i)=>[X(x),Z(ct[i])]).concat(cx.slice().reverse().map((x,i)=>[X(x),Z(-cb[cx.length-1-i])])),{w:0.2,dash:[1.6,0.8],avoid:'soft'}); }
   if(g.slot) S.poly(g.slot.rect.map(q=>[X(q[0]),Z(q[1])]),{w:0.2,dash:[1.6,0.8],avoid:'soft'});
   S.poly(A.harness.map(q=>[X(q[0]),Z(q[2])]),{closed:false,w:0.18,dash:[4,1,1,1],c:'#555',avoid:'soft'});
@@ -2754,7 +2764,7 @@ function drawingModel(rel,hash){
   cgm(A.CG); cgm(A.CB);
   // section cut lines + letters (fixed)
   let lettersBottom=0;
-  rel.sections.forEach(sx=>{ const q=radii(sx.t,p), y1=Z(q[0])-4, y2=Z(-q[1])+4; S.line(X(sx.x),y1,X(sx.x),y2,{w:0.25,dash:[6,1.2,1,1.2],avoid:'hard'});
+  rel.sections.forEach(sx=>{ const q=radii(sx.t,p), bz=bendZ(sx.t*p.L,p), y1=Z(q[0]+bz)-4, y2=Z(-q[1]+bz)+4; S.line(X(sx.x),y1,X(sx.x),y2,{w:0.25,dash:[6,1.2,1,1.2],avoid:'hard'});
     S.text(X(sx.x),y1-0.9,DT.t,sx.n,{a:'middle',b:true}); S.text(X(sx.x),y2+0.9+DT.t*DT.cap,DT.t,sx.n,{a:'middle',b:true}); lettersBottom=Math.max(lettersBottom,y2+1+DT.t*DT.cap); });
   // dimensions below
   const yb=Math.max(Z(zmin)+8,lettersBottom+7);
@@ -3247,7 +3257,7 @@ function softShell(rel){
   const ts=stationTs(), pos=[], idx=[], NA=NAB;
   for(let r=cav.r0;r<=cav.r1;r++){ const q=cav.inner(r), x=ts[r+1]*p.L, se=seAt(x/p.L,p); for(let j=0;j<NA;j++){ const a=2*Math.PI*j/NA, c=Math.cos(a), s=Math.sin(a); pos.push(x,q[2]*sgnpow(c,2/se),(s>=0?q[0]:q[1])*sgnpow(s,2/se)); } }
   const nR=cav.r1-cav.r0+1; for(let i=0;i<nR-1;i++) for(let j=0;j<NA;j++){ const a0=i*NA+j,a1=i*NA+(j+1)%NA,b0=a0+NA,b1=a1+NA; idx.push(a0,b0,a1,a1,b0,b1); }
-  const c0=pos.length/3; pos.push(cav.x0,0,0); const c1=c0+1; pos.push(cav.x1,0,0);
+  const c0=pos.length/3; pos.push(cav.x0,0,bendZ(cav.x0,p)); const c1=c0+1; pos.push(cav.x1,0,bendZ(cav.x1,p));
   for(let j=0;j<NA;j++){ idx.push(c0,j,(j+1)%NA); const o=(nR-1)*NA; idx.push(c1,o+(j+1)%NA,o+j); }
   if(massProps(trisFromIndexed(pos,idx)).V>0) for(let k=0;k<idx.length;k+=3){ const q=idx[k+1]; idx[k+1]=idx[k+2]; idx[k+2]=q; }   // cavity faces inward
   const off=body.pos.length/3, m={pos:body.pos.concat(pos),idx:body.idx.concat(idx.map(i=>i+off))}, mp=meshProps(m);
@@ -3565,7 +3575,7 @@ const inputs={};
 const ITEM={}; GROUPS.forEach(g=>g.items.forEach(it=>ITEM[it.k]=it)); SIM_ITEMS.forEach(it=>ITEM[it.k]=it);
 /* k: [label, unit, hint, display scale] — scale converts the internal value for display (halfW ×2 = full width, fat ×100 = %) */
 const LBL={
-  L:['Body length','mm'], top:['Back height, above axis','mm'], bot:['Belly depth, below axis','mm'],
+  L:['Body length','mm'], noseBend:['Nose bend','°','+ = nose down, − = nose up'], tailBend:['Tail bend','°','+ = tail down, − = tail up'], top:['Back height, above axis','mm'], bot:['Belly depth, below axis','mm'],
   halfW:['Body width (full)','mm','',2], fat:['Max-thickness station','%','% of length from the nose',100],
   taper:['Tail taper','×','higher = slimmer tail'], se:['Cross-section: round ↔ flat-sided','','2 = round, 3.5 = slab-sided'], tailR:['Tail thickness','mm'],
   billLen:['Bill length (exposed)','mm'], billW:['Bill width','mm'], billAng:['Bill angle below body axis','°','lower = deeper diving'],
@@ -3590,7 +3600,7 @@ Object.assign(LBL,{noseFace:['Nose face'],faceD:['Face / cup diameter','mm'],cup
   countS:['Countdown','s','sinking lures: seconds before the retrieve'],twitchHz:['Twitch cadence','/s','walk-the-dog'],family:['Lure family'],species:['Target species']});
 /* Design accordion: [name, basic keys, advanced keys]; a group shows when the family uses one of its keys (crank = the v5 groups) */
 const UI_GROUPS=[
-  ['Shape',['L','top','bot','halfW','fat','taper','plateT','spoonCup'],['se','tailR']],
+  ['Shape',['L','top','bot','halfW','fat','taper','noseBend','tailBend','plateT','spoonCup'],['se','tailR']],
   ['Nose & face',['noseFace','faceD','cupDepth','faceAng'],[]],
   ['Section',['seN','seM','seT'],[]],
   ['Bill',['billLen','billW','billAng','billMat','tieU'],['billT','rootX','rootZ']],
@@ -4047,12 +4057,12 @@ function update3D(p,body,bill,A){
   buildComp3D(p,A);
   // eyes (visual only)
   disposeTree(eyes); eyes.clear();
-  const [te,ezf]=A.gen?eyePlace(p):[0.12,0.28], [top,,w]=radii(te,p), ez=top*ezf, ey=w*Math.pow(Math.max(0,1-Math.pow(ez/top,seAt(te,p))),1/seAt(te,p))*0.98, er=Math.max(1.4,top*0.17);
+  const [te,ezf]=A.gen?eyePlace(p):[0.12,0.28], [top,,w]=radii(te,p), ez=top*ezf, ey=w*Math.pow(Math.max(0,1-Math.pow(ez/top,seAt(te,p))),1/seAt(te,p))*0.98, er=Math.max(1.4,top*0.17), ezW=ez+bendZ(te*p.L,p);
   if(FAM(p).body!=='plate') [1,-1].forEach(sd=>{
     const ring=new THREE.Mesh(new THREE.SphereGeometry(er,24,16),matOf(0xf2c514,{roughness:.2,metalness:.3}));
-    ring.scale.set(1,0.25,1); ring.position.set(te*p.L,sd*ey,ez); eyes.add(ring);
+    ring.scale.set(1,0.25,1); ring.position.set(te*p.L,sd*ey,ezW); eyes.add(ring);
     const pup=new THREE.Mesh(new THREE.SphereGeometry(er*0.5,20,12),matOf(0x111111,{roughness:.1}));
-    pup.scale.set(1,0.3,1); pup.position.set(te*p.L,sd*(ey+er*0.18),ez); eyes.add(pup);
+    pup.scale.set(1,0.3,1); pup.position.set(te*p.L,sd*(ey+er*0.18),ezW); eyes.add(pup);
   });
   hookGroup.visible=eyes.visible=billMesh.visible=compGroup.visible=!showH;
   // swim pivot near the head third
@@ -5387,7 +5397,8 @@ function drawSide(p,bill,A){
   const bc=billSideCorners(p,bill.B,bill.outline.tip), H=A.hooks;
   const drop=Math.max(H.belly?H.belly.ringD+H.belly.l*1.2-A.pts.belly[2]:0, H.tail?H.tail.ringD+H.tail.l*1.2:0);
   const xmin=Math.min(0,...bc.map(v=>v.x))-8, xmax=p.L+(H.tail?H.tail.gap:0)+16;
-  const zmax=p.top+8, zmin=Math.min(-p.bot,...bc.map(v=>v.z),-drop)-6;
+  const tailLow=H.tail?A.pts.tail[2]-H.tail.ringD-H.tail.l*1.2:0;
+  const zmax=Math.max(p.top,...pd.tops)+8, zmin=Math.min(-p.bot,-Math.max(...pd.bots),...bc.map(v=>v.z),-drop,tailLow)-6;
   const V=sideView(xmin,xmax,zmin,zmax); svg.setAttribute('viewBox',`${V.x} ${V.y} ${V.w} ${V.h}`);
   const sw=V.w/500;
   const outline=pd.xs.map((x,i)=>`${x},${-pd.tops[i]}`).concat(pd.xs.slice().reverse().map((x,i)=>`${x},${pd.bots[pd.xs.length-1-i]}`)).join(' ');
@@ -6577,7 +6588,7 @@ const ZH={
 'Hooks {}× {}':'鱼钩 {}× {}','{} USD':'{} USD','{} rpm':'{} rpm','{} cm':'{} cm','{} mm':'{} mm',
 'Undo ({})':'撤销（{}）','Remove Ballast {}':'移除配重 {}','Remove Hook hanger {}':'移除钩挂点 {}','Remove Line tie (screw eye) {}':'移除拉线环（螺丝眼）{}',
 'Blank ellipsoid {} × {} × {} mm':'空白椭球体 {} × {} × {} mm','Status: Concept':'状态：概念','Status: Checked':'状态：已校核','Status: Approved':'状态：已批准','Status: Golden':'状态：金样',
-'Language':'语言','Zoom':'缩放','Zoom in':'放大','Zoom out':'缩小','Fit the whole profile (double-click the view)':'显示完整轮廓（双击视图）',
+'Language':'语言','Nose bend':'鼻部弯曲','Tail bend':'尾部弯曲','+ = nose down, − = nose up':'+ = 鼻部向下，− = 鼻部向上','+ = tail down, − = tail up':'+ = 尾部向下，− = 尾部向上','Zoom':'缩放','Zoom in':'放大','Zoom out':'缩小','Fit the whole profile (double-click the view)':'显示完整轮廓（双击视图）',
 /* family descriptions */
 'Diving lip: swims down on the retrieve, floats up on a pause.':'潜水唇：收线时下潜，停顿时上浮。',
 'Lofted floating body with a diving bill; dives on the retrieve and floats up on a pause.':'带潜水唇的浮水本体；收线时下潜，停顿时上浮。',
